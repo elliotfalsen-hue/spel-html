@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jag vill slåss – RPG</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      background: #050509;
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      min-height: 100vh;
+    }
+    h1 {
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 1.4rem;
+      margin-bottom: 4px;
+    }
+    h2 {
+      font-size: 0.9rem;
+      opacity: 0.8;
+      margin-bottom: 10px;
+    }
+    #game {
+      display: grid;
+      grid-template-columns: 260px 1fr 260px;
+      gap: 10px;
+      width: 100%;
+      max-width: 1100px;
+    }
+    #leftPanel, #rightPanel {
+      background: #101018;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 0 18px rgba(0,0,0,0.7);
+      font-size: 0.85rem;
+    }
+    #centerPanel {
+      background: #080812;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 0 18px rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #log {
+      background: #050509;
+      border-radius: 8px;
+      padding: 8px;
+      height: 260px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+    #actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: none;
+      background: #3949ab;
+      color: #fff;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:hover {
+      background: #5c6bc0;
+      transform: translateY(-1px);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button.secondary {
+      background: #455a64;
+    }
+    button.secondary:hover {
+      background: #607d8b;
+    }
+    button.danger {
+      background: #c62828;
+    }
+    button.danger:hover {
+      background: #e53935;
+    }
+    button.small {
+      padding: 3px 6px;
+      font-size: 0.75rem;
+    }
+    .sectionTitle {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+    .statRow {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    #playerStats, #enemyStats, #zoneInfo, #questInfo {
+      font-size: 0.8rem;
+    }
+    #inventory, #skills, #npcs {
+      font-size: 0.8rem;
+      margin-top: 4px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      margin-right: 4px;
+      margin-bottom: 2px;
+    }
+    .tag.common { background: #424242; }
+    .tag.rare { background: #1565c0; }
+    .tag.epic { background: #6a1b9a; }
+    .tag.legendary { background: #f9a825; color: #000; }
+    .hpBarOuter, .xpBarOuter {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: #222;
+      overflow: hidden;
+      margin-top: 2px;
+      margin-bottom: 4px;
+    }
+    .hpBarInner {
+      height: 100%;
+      background: linear-gradient(90deg, #ef5350, #c62828);
+      width: 100%;
+    }
+    .xpBarInner {
+      height: 100%;
+      background: linear-gradient(90deg, #64b5f6, #1e88e5);
+      width: 0%;
+    }
+    #enemyBox {
+      background: #141421;
+      border-radius: 8px;
+      padding: 6px;
+      min-height: 80px;
+    }
+    #enemyName {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    #enemyDesc {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-bottom: 2px;
+    }
+    #zoneName {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    #questList li {
+      margin-left: 16px;
+      margin-bottom: 2px;
+    }
+    #topBar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      opacity: 0.9;
+    }
+    #topBar span {
+      margin-right: 8px;
+    }
+    #difficultyTag {
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #263238;
+      font-size: 0.7rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Jag vill slåss</h1>
+  <h2>RPG – bossar, NPC:er, loot, skills, zoner</h2>
+
+  <div id="game">
+    <div id="leftPanel">
+      <div class="sectionTitle">Hjälte</div>
+      <div id="playerStats"></div>
+      <div class="sectionTitle">Skills</div>
+      <div id="skills"></div>
+      <div class="sectionTitle">Inventory</div>
+      <div id="inventory"></div>
+    </div>
+
+    <div id="centerPanel">
+      <div id="topBar">
+        <div>
+          <span id="daySpan">Dag 1</span> ·
+          <span id="zoneSpan">Zon: Start</span>
+        </div>
+        <div>
+          <span id="difficultyTag">Normal</span>
+        </div>
+      </div>
+      <div id="zoneInfo"></div>
+      <div id="enemyBox">
+        <div id="enemyName">Ingen fiende just nu</div>
+        <div id="enemyDesc"></div>
+        <div class="hpBarOuter"><div class="hpBarInner" id="enemyHpBar"></div></div>
+        <div id="enemyStats"></div>
+      </div>
+      <div id="log"></div>
+      <div id="actions"></div>
+    </div>
+
+    <div id="rightPanel">
+      <div class="sectionTitle">NPC:er</div>
+      <div id="npcs"></div>
+      <div class="sectionTitle">Quests</div>
+      <div id="questInfo">
+        <ul id="questList"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // DATA & STATE
+    // =========================
+    const logEl = document.getElementById("log");
+    const actionsEl = document.getElementById("actions");
+    const playerStatsEl = document.getElementById("playerStats");
+    const inventoryEl = document.getElementById("inventory");
+    const skillsEl = document.getElementById("skills");
+    const npcsEl = document.getElementById("npcs");
+    const questListEl = document.getElementById("questList");
+    const zoneInfoEl = document.getElementById("zoneInfo");
+    const enemyNameEl = document.getElementById("enemyName");
+    const enemyDescEl = document.getElementById("enemyDesc");
+    const enemyStatsEl = document.getElementById("enemyStats");
+    const enemyHpBar = document.getElementById("enemyHpBar");
+    const daySpan = document.getElementById("daySpan");
+    const zoneSpan = document.getElementById("zoneSpan");
+    const difficultyTag = document.getElementById("difficultyTag");
+
+    const rarityColors = {
+      common: "common",
+      rare: "rare",
+      epic: "epic",
+      legendary: "legendary"
+    };
+
+    const player = {
+      name: "Elliot",
+      cls: "Vandrande Kämpen",
+      level: 1,
+      xp: 0,
+      xpToNext: 20,
+      hp: 30,
+      maxHp: 30,
+      mana: 10,
+      maxMana: 10,
+      atk: 6,
+      def: 2,
+      crit: 0.1,
+      gold: 0,
+      zone: "Start",
+      day: 1,
+      skills: [],
+      inventory: [],
+      status: [],
+      alive: true
+    };
+
+    let currentEnemy = null;
+    let currentZone = null;
+    let currentQuest = null;
+    let inCombat = false;
+    let turn = "player"; // "player" | "enemy"
+    let difficulty = "Normal";
+
+    const zones = [
+      {
+        id: "Start",
+        name: "Lägret vid Ruinerna",
+        desc: "Ett provisoriskt läger vid kanten av gamla ruiner. Tryggt, men fullt av oro.",
+        danger: 1,
+        enemies: ["slime", "wolf"],
+        boss: "ruinGuardian"
+      },
+      {
+        id: "Forest",
+        name: "Den Förvridna Skogen",
+        desc: "Träden viskar, marken rör sig. Något i skogen hatar ljus.",
+        danger: 2,
+        enemies: ["wolf", "bandit", "spirit"],
+        boss: "forestWitch"
+      },
+      {
+        id: "Catacombs",
+        name: "Katakomberna",
+        desc: "Gamla gravar, nya problem. Odöda vaknar när du närmar dig.",
+        danger: 3,
+        enemies: ["skeleton", "ghoul", "cultist"],
+        boss: "boneKing"
+      }
+    ];
+
+    const enemyTemplates = {
+      slime: {
+        name: "Slemklump",
+        desc: "En kladdig fiende som mest är irriterande.",
+        baseHp: 14,
+        baseAtk: 4,
+        baseDef: 1,
+        xp: 8,
+        gold: [3, 7],
+        skills: ["slap"]
+      },
+      wolf: {
+        name: "Vild Varg",
+        desc: "Snabb och hungrig.",
+        baseHp: 18,
+        baseAtk: 6,
+        baseDef: 1,
+        xp: 12,
+        gold: [5, 10],
+        skills: ["bite", "howl"]
+      },
+      bandit: {
+        name: "Vägbandit",
+        desc: "Vill ha dina mynt. Och kanske dina organ.",
+        baseHp: 22,
+        baseAtk: 7,
+        baseDef: 2,
+        xp: 16,
+        gold: [8, 15],
+        skills: ["stab", "cheapShot"]
+      },
+      spirit: {
+        name: "Vilsen Ande",
+        desc: "Halvt här, halvt borta. Skadar ditt sinne.",
+        baseHp: 16,
+        baseAtk: 5,
+        baseDef: 0,
+        xp: 18,
+        gold: [6, 12],
+        skills: ["mindSpike", "drain"]
+      },
+      skeleton: {
+        name: "Skelettkrigare",
+        desc: "Ben, svärd och dålig attityd.",
+        baseHp: 24,
+        baseAtk: 8,
+        baseDef: 3,
+        xp: 20,
+        gold: [10, 18],
+        skills: ["slash", "shieldUp"]
+      },
+      ghoul: {
+        name: "Ghul",
+        desc: "Äter lik. Eller dig.",
+        baseHp: 26,
+        baseAtk: 9,
+        baseDef: 2,
+        xp: 24,
+        gold: [12, 20],
+        skills: ["claw", "infect"]
+      },
+      cultist: {
+        name: "Kultist",
+        desc: "Mumlar om gamla gudar.",
+        baseHp: 20,
+        baseAtk: 7,
+        baseDef: 1,
+        xp: 22,
+        gold: [10, 18],
+        skills: ["darkBolt", "curse"]
+      },
+      ruinGuardian: {
+        name: "Ruinväktaren",
+        desc: "En gammal stenstaty som väckts till liv.",
+        baseHp: 60,
+        baseAtk: 10,
+        baseDef: 4,
+        xp: 40,
+        gold: [30, 50],
+        boss: true,
+        skills: ["slam", "stoneSkin"]
+      },
+      forestWitch: {
+        name: "Skogshäxan",
+        desc: "Hon styr rötter, dimma och din rädsla.",
+        baseHp: 80,
+        baseAtk: 12,
+        baseDef: 3,
+        xp: 60,
+        gold: [40, 70],
+        boss: true,
+        skills: ["root", "poisonMist", "hex"]
+      },
+      boneKing: {
+        name: "BenKungen",
+        desc: "Härskare över katakomberna.",
+        baseHp: 100,
+        baseAtk: 14,
+        baseDef: 5,
+        xp: 80,
+        gold: [60, 100],
+        boss: true,
+        skills: ["boneStorm", "summonSkulls", "deathMark"]
+      }
+    };
+
+    const npcList = [
+      {
+        id: "sage",
+        name: "Gammal Vis Man",
+        role: "Mentor",
+        dialog: [
+          "Världen är trasig, men du kan sy ihop den.",
+          "Bossarna är bara symptom. Rötan sitter djupare.",
+          "Varje val du gör formar din legend."
+        ],
+        onTalk() {
+          log("🧙 Den vise mannen tittar på dig och nickar långsamt.");
+          if (!currentQuest) {
+            startQuest({
+              id: "firstBoss",
+              name: "Fäll Ruinväktaren",
+              desc: "Besegra Ruinväktaren i ruinerna.",
+              zone: "Start",
+              bossId: "ruinGuardian",
+              reward: { xp: 30, gold: 40, item: { name: "Ruinernas Sigill", rarity: "rare", type: "trinket", atk: 2, def: 1 } }
+            });
+          } else {
+            log("🧙 \"Du vet vad du måste göra. Fortsätt.\"");
+          }
+        }
+      },
+      {
+        id: "merchant",
+        name: "Handlare",
+        role: "Shop",
+        dialog: [
+          "Allt har ett pris.",
+          "Jag köper också saker, om du har något intressant.",
+          "Du ser ut som du behöver mer rustning."
+        ],
+        stock: [
+          { name: "Liten Potion", type: "consumable", heal: 15, cost: 8, rarity: "common" },
+          { name: "Läderpansar", type: "armor", def: 2, cost: 15, rarity: "common" },
+          { name: "Järnsvärd", type: "weapon", atk: 4, cost: 20, rarity: "rare" },
+          { name: "Mystisk Amulett", type: "trinket", atk: 1, def: 1, cost: 25, rarity: "epic" }
+        ],
+        onTalk() {
+          log("🧺 Handlaren gnuggar händerna. \"Vad vill du köpa?\"");
+          showShop(this);
+        }
+      },
+      {
+        id: "rogue",
+        name: "Skuggan",
+        role: "Info",
+        dialog: [
+          "Jag vet saker andra inte vet.",
+          "Bossar har svagheter. Du måste bara hitta dem.",
+          "Guld är bra. Information är bättre."
+        ],
+        onTalk() {
+          const lines = this.dialog;
+          log("🕶️ Skuggan viskar: \"" + lines[Math.floor(Math.random() * lines.length)] + "\"");
+          if (currentEnemy && currentEnemy.boss) {
+            log("🕶️ \"Den där bossen du slåss mot? Den hatar kritiska träffar.\"");
+          }
+        }
+      }
+    ];
+
+    const skillLibrary = {
+      powerStrike: {
+        id: "powerStrike",
+        name: "Kraftslag",
+        desc: "Ett hårt slag som gör extra skada.",
+        manaCost: 3,
+        use(target) {
+          const base = player.atk + 4;
+          const dmg = rollDamage(base, target.def, 0.2);
+          target.hp -= dmg;
+          log(`💥 Du använder Kraftslag och gör ${dmg} skada på ${target.name}.`);
+        }
+      },
+      guardStance: {
+        id: "guardStance",
+        name: "Vaktställning",
+        desc: "Ökar din försvar nästa runda.",
+        manaCost: 2,
+        use() {
+          addStatus(player, { id: "guard", name: "Vakt", defBonus: 3, turns: 2 });
+          log("🛡️ Du går in i vaktställning. Försvaret ökar tillfälligt.");
+        }
+      },
+      quickShot: {
+        id: "quickShot",
+        name: "Snabb Skott",
+        desc: "Ett snabbt anfall med chans att gå först.",
+        manaCost: 2,
+        use(target) {
+          const dmg = rollDamage(player.atk, target.def, 0.15);
+          target.hp -= dmg;
+          log(`🏹 Du skjuter ett snabbt skott och gör ${dmg} skada på ${target.name}.`);
+        }
+      }
+    };
+
+    const enemySkills = {
+      slap(enemy, target) {
+        const dmg = rollDamage(enemy.atk, target.def, 0);
+        target.hp -= dmg;
+        log(`👋 ${enemy.name} slår dig för ${dmg} skada.`);
+      },
+      bite(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 1, target.def, 0.05);
+        target.hp -= dmg;
+        log(`🐺 ${enemy.name} biter dig för ${dmg} skada.`);
+      },
+      howl(enemy, target) {
+        addStatus(enemy, { id: "howlBuff", name: "Raseri", atkBonus: 2, turns: 3 });
+        log(`🐺 ${enemy.name} ylar och blir starkare.`);
+      },
+      stab(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 2, target.def, 0.1);
+        target.hp -= dmg;
+        log(`🗡️ ${enemy.name} hugger dig för ${dmg} skada.`);
+      },
+      cheapShot(enemy, target) {
+        const dmg = rollDamage(enemy.atk, target.def, 0.2);
+        target.hp -= dmg;
+        log(`💸 ${enemy.name} gör ett fult trick och gör ${dmg} skada.`);
+      },
+      mindSpike(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 1, target.def, 0.15);
+        target.hp -= dmg;
+        log(`🧠 ${enemy.name} sticker ditt sinne för ${dmg} skada.`);
+      },
+      drain(enemy, target) {
+        const dmg = rollDamage(enemy.atk, target.def, 0.1);
+        target.hp -= dmg;
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + Math.floor(dmg / 2));
+        log(`🩸 ${enemy.name} dränerar dig på ${dmg} HP och läker sig själv.`);
+      },
+      slash(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 1, target.def, 0.05);
+        target.hp -= dmg;
+        log(`⚔️ ${enemy.name} hugger dig för ${dmg} skada.`);
+      },
+      shieldUp(enemy, target) {
+        addStatus(enemy, { id: "boneShield", name: "Benskydd", defBonus: 3, turns: 3 });
+        log(`🦴 ${enemy.name} höjer sitt benskydd.`);
+      },
+      claw(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 2, target.def, 0.1);
+        target.hp -= dmg;
+        log(`🐾 ${enemy.name} river dig för ${dmg} skada.`);
+      },
+      infect(enemy, target) {
+        const dmg = rollDamage(enemy.atk, target.def, 0.05);
+        target.hp -= dmg;
+        addStatus(target, { id: "infection", name: "Infektion", dot: 2, turns: 3 });
+        log(`☣️ ${enemy.name} infekterar dig. Du tar skada över tid.`);
+      },
+      darkBolt(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 2, target.def, 0.15);
+        target.hp -= dmg;
+        log(`🌑 ${enemy.name} skjuter en mörk projektil för ${dmg} skada.`);
+      },
+      curse(enemy, target) {
+        addStatus(target, { id: "cursed", name: "Förbannelse", atkPenalty: 2, turns: 3 });
+        log(`🔮 ${enemy.name} förbannar dig. Din attack minskar.`);
+      },
+      slam(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 3, target.def, 0.1);
+        target.hp -= dmg;
+        log(`🪨 ${enemy.name} slår i marken och gör ${dmg} skada.`);
+      },
+      stoneSkin(enemy, target) {
+        addStatus(enemy, { id: "stoneSkin", name: "Stenhud", defBonus: 4, turns: 4 });
+        log(`🪨 ${enemy.name} får stenhud. Försvaret ökar kraftigt.`);
+      },
+      root(enemy, target) {
+        addStatus(target, { id: "rooted", name: "Fastbunden", skipTurn: 1, turns: 1 });
+        log(`🌿 ${enemy.name} binder dina ben. Du kan missa en runda.`);
+      },
+      poisonMist(enemy, target) {
+        addStatus(target, { id: "poison", name: "Gift", dot: 3, turns: 4 });
+        log(`☁️ ${enemy.name} släpper ut giftig dimma.`);
+      },
+      hex(enemy, target) {
+        addStatus(target, { id: "hexed", name: "Hex", atkPenalty: 2, defPenalty: 1, turns: 3 });
+        log(`🧹 ${enemy.name} kastar en förbannelse över dig.`);
+      },
+      boneStorm(enemy, target) {
+        const dmg = rollDamage(enemy.atk + 4, target.def, 0.2);
+        target.hp -= dmg;
+        log(`🌪️🦴 ${enemy.name} skapar en benstorm och gör ${dmg} skada.`);
+      },
+      summonSkulls(enemy, target) {
+        addStatus(enemy, { id: "skullGuard", name: "Skallvakt", defBonus: 2, atkBonus: 2, turns: 3 });
+        log(`💀 ${enemy.name} kallar på skallar som skyddar honom.`);
+      },
+      deathMark(enemy, target) {
+        addStatus(target, { id: "deathMark", name: "Dödsmärke", dmgTakenBonus: 3, turns: 3 });
+        log(`☠️ ${enemy.name} märker dig för döden. Du tar mer skada.`);
+      }
+    };
+
+    // =========================
+    // UTILS
+    // =========================
+    function log(text) {
+      const line = document.createElement("div");
+      line.textContent = text;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function rollDamage(atk, def, critChance = 0.1) {
+      const base = Math.max(1, atk - def);
+      let dmg = randInt(Math.max(1, base - 2), base + 2);
+      let crit = false;
+      if (Math.random() < critChance + player.crit * 0.5) {
+        dmg = Math.floor(dmg * 1.8);
+        crit = true;
+      }
+      if (crit) log("💢 Kritisk träff!");
+      return Math.max(1, dmg);
+    }
+
+    function addStatus(target, status) {
+      if (!target.status) target.status = [];
+      const existing = target.status.find(s => s.id === status.id);
+      if (existing) {
+        existing.turns = status.turns;
+      } else {
+        target.status.push({ ...status });
+      }
+    }
+
+    function applyStatusEffects(target) {
+      if (!target.status || !target.status.length) return;
+      let totalDot = 0;
+      target.status.forEach(s => {
+        if (s.dot) totalDot += s.dot;
+      });
+      if (totalDot > 0) {
+        target.hp -= totalDot;
+        log(`☠️ ${target.name} tar ${totalDot} skada från effekter.`);
+      }
+      target.status.forEach(s => s.turns--);
+      target.status = target.status.filter(s => s.turns > 0);
+    }
+
+    function getEffectiveStats(entity) {
+      let atk = entity.atk;
+      let def = entity.def;
+      if (entity.status) {
+        entity.status.forEach(s => {
+          if (s.atkBonus) atk += s.atkBonus;
+          if (s.defBonus) def += s.defBonus;
+          if (s.atkPenalty) atk -= s.atkPenalty;
+          if (s.defPenalty) def -= s.defPenalty;
+        });
+      }
+      return { atk, def };
+    }
+
+    function hasStatus(entity, id) {
+      return entity.status && entity.status.some(s => s.id === id);
+    }
+
+    function healPlayer(amount) {
+      player.hp = Math.min(player.maxHp, player.hp + amount);
+      log(`❤️ Du läker ${amount} HP.`);
+      renderPlayer();
+    }
+
+    function gainXp(amount) {
+      player.xp += amount;
+      log(`✨ Du får ${amount} XP.`);
+      while (player.xp >= player.xpToNext) {
+        player.xp -= player.xpToNext;
+        player.level++;
+        player.xpToNext = Math.floor(player.xpToNext * 1.4);
+        player.maxHp += 5;
+        player.hp = player.maxHp;
+        player.atk += 2;
+        player.def += 1;
+        player.maxMana += 2;
+        player.mana = player.maxMana;
+        log(`⬆️ LEVEL UP! Du är nu nivå ${player.level}.`);
+        maybeLearnSkill();
+      }
+      renderPlayer();
+    }
+
+    function gainGold(amount) {
+      player.gold += amount;
+      log(`🪙 Du får ${amount} guld.`);
+      renderPlayer();
+    }
+
+    function addItem(item) {
+      player.inventory.push(item);
+      log(`🎁 Du får föremål: ${item.name} (${item.rarity || "common"}).`);
+      renderInventory();
+      autoEquip(item);
+    }
+
+    function autoEquip(item) {
+      if (item.type === "weapon") {
+        player.atk += item.atk || 0;
+        log(`⚔️ Du utrustar ${item.name}. Attacken ökar.`);
+      } else if (item.type === "armor") {
+        player.def += item.def || 0;
+        log(`🛡️ Du tar på dig ${item.name}. Försvaret ökar.`);
+      } else if (item.type === "trinket") {
+        player.atk += item.atk || 0;
+        player.def += item.def || 0;
+        log(`🔮 Du bär ${item.name}. Dina stats förbättras.`);
+      }
+      renderPlayer();
+    }
+
+    function maybeLearnSkill() {
+      if (player.level === 2) {
+        player.skills.push(skillLibrary.powerStrike);
+        log("📘 Du lär dig en ny skill: Kraftslag.");
+      } else if (player.level === 3) {
+        player.skills.push(skillLibrary.guardStance);
+        log("📘 Du lär dig en ny skill: Vaktställning.");
+      } else if (player.level === 4) {
+        player.skills.push(skillLibrary.quickShot);
+        log("📘 Du lär dig en ny skill: Snabb Skott.");
+      }
+      renderSkills();
+    }
+
+    function createEnemy(templateId) {
+      const t = enemyTemplates[templateId];
+      const zoneDanger = currentZone ? currentZone.danger : 1;
+      const hp = t.baseHp + zoneDanger * 4;
+      const atk = t.baseAtk + zoneDanger * 2;
+      const def = t.baseDef + zoneDanger;
+      return {
+        id: templateId,
+        name: t.name,
+        desc: t.desc,
+        hp,
+        maxHp: hp,
+        atk,
+        def,
+        xp: t.xp + zoneDanger * 4,
+        goldRange: t.gold,
+        boss: !!t.boss,
+        skills: t.skills,
+        status: []
+      };
+    }
+
+    function randomEnemy() {
+      const pool = currentZone.enemies;
+      const id = pool[randInt(0, pool.length - 1)];
+      return createEnemy(id);
+    }
+
+    function bossEnemy() {
+      return createEnemy(currentZone.boss);
+    }
+
+    function randomLoot(enemy) {
+      const roll = Math.random();
+      let rarity = "common";
+      if (roll > 0.9) rarity = "legendary";
+      else if (roll > 0.7) rarity = "epic";
+      else if (roll > 0.5) rarity = "rare";
+
+      const baseName = enemy.boss ? "Bossrelik" : "Fiendeföremål";
+      const item = {
+        name: `${baseName} (${enemy.name})`,
+        rarity,
+        type: "trinket"
+      };
+      if (rarity === "common") {
+        item.atk = 1;
+      } else if (rarity === "rare") {
+        item.atk = 2;
+        item.def = 1;
+      } else if (rarity === "epic") {
+        item.atk = 3;
+        item.def = 2;
+      } else if (rarity === "legendary") {
+        item.atk = 4;
+        item.def = 3;
+      }
+      return item;
+    }
+
+    // =========================
+    // QUESTS
+    // =========================
+    function startQuest(q) {
+      currentQuest = q;
+      log(`📜 Ny quest: ${q.name} – ${q.desc}`);
+      renderQuests();
+    }
+
+    function checkQuestCompletion(enemy) {
+      if (!currentQuest) return;
+      if (currentQuest.bossId && enemy.id === currentQuest.bossId) {
+        log(`✅ Quest klar: ${currentQuest.name}`);
+        if (currentQuest.reward) {
+          if (currentQuest.reward.xp) gainXp(currentQuest.reward.xp);
+          if (currentQuest.reward.gold) gainGold(currentQuest.reward.gold);
+          if (currentQuest.reward.item) addItem(currentQuest.reward.item);
+        }
+        currentQuest = null;
+        renderQuests();
+      }
+    }
+
+    // =========================
+    // RENDER
+    // =========================
+    function renderPlayer() {
+      const eff = getEffectiveStats(player);
+      playerStatsEl.innerHTML = `
+        <div class="statRow"><span>Namn:</span><span>${player.name}</span></div>
+        <div class="statRow"><span>Klass:</span><span>${player.cls}</span></div>
+        <div class="statRow"><span>Nivå:</span><span>${player.level}</span></div>
+        <div class="statRow"><span>XP:</span><span>${player.xp}/${player.xpToNext}</span></div>
+        <div class="hpBarOuter"><div class="hpBarInner" style="width:${(player.hp / player.maxHp) * 100}%"></div></div>
+        <div class="statRow"><span>HP:</span><span>${player.hp}/${player.maxHp}</span></div>
+        <div class="statRow"><span>Mana:</span><span>${player.mana}/${player.maxMana}</span></div>
+        <div class="statRow"><span>ATK:</span><span>${eff.atk}</span></div>
+        <div class="statRow"><span>DEF:</span><span>${eff.def}</span></div>
+        <div class="statRow"><span>Krit:</span><span>${Math.round(player.crit * 100)}%</span></div>
+        <div class="statRow"><span>Guld:</span><span>${player.gold}</span></div>
+      `;
+      daySpan.textContent = `Dag ${player.day}`;
+      zoneSpan.textContent = `Zon: ${player.zone}`;
+    }
+
+    function renderInventory() {
+      if (!player.inventory.length) {
+        inventoryEl.textContent = "Tomt.";
+        return;
+      }
+      inventoryEl.innerHTML = "";
+      player.inventory.forEach(item => {
+        const div = document.createElement("div");
+        const rarityClass = rarityColors[item.rarity || "common"];
+        div.innerHTML = `
+          <span class="tag ${rarityClass}">${item.rarity || "common"}</span>
+          ${item.name} <span style="opacity:0.7;">(${item.type})</span>
+        `;
+        inventoryEl.appendChild(div);
+      });
+    }
+
+    function renderSkills() {
+      if (!player.skills.length) {
+        skillsEl.textContent = "Inga aktiva skills ännu.";
+        return;
+      }
+      skillsEl.innerHTML = "";
+      player.skills.forEach(s => {
+        const div = document.createElement("div");
+        div.textContent = `${s.name} – ${s.desc} (Mana: ${s.manaCost})`;
+        skillsEl.appendChild(div);
+      });
+    }
+
+    function renderNPCs() {
+      npcsEl.innerHTML = "";
+      npcList.forEach(n => {
+        const div = document.createElement("div");
+        div.style.marginBottom = "4px";
+        div.innerHTML = `
+          <strong>${n.name}</strong> – ${n.role}
+          <br/>
+          <button class="small secondary" data-npc="${n.id}">Prata</button>
+        `;
+        npcsEl.appendChild(div);
+      });
+      npcsEl.querySelectorAll("button[data-npc]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-npc");
+          const npc = npcList.find(n => n.id === id);
+          if (!npc) return;
+          const line = npc.dialog[Math.floor(Math.random() * npc.dialog.length)];
+          log(`💬 ${npc.name}: "${line}"`);
+          if (npc.onTalk) npc.onTalk();
+        });
+      });
+    }
+
+    function renderQuests() {
+      questListEl.innerHTML = "";
+      if (!currentQuest) {
+        const li = document.createElement("li");
+        li.textContent = "Inga aktiva quests.";
+        questListEl.appendChild(li);
+        return;
+      }
+      const li = document.createElement("li");
+      li.textContent = `${currentQuest.name} – ${currentQuest.desc}`;
+      questListEl.appendChild(li);
+    }
+
+    function renderZone() {
+      zoneInfoEl.innerHTML = `
+        <div id="zoneName">${currentZone.name}</div>
+        <div style="font-size:0.8rem;opacity:0.8;margin-bottom:4px;">${currentZone.desc}</div>
+        <div style="font-size:0.75rem;opacity:0.7;">Fara: ${currentZone.danger}</div>
+      `;
+      if (currentZone.danger <= 1) difficultyTag.textContent = "Lätt";
+      else if (currentZone.danger === 2) difficultyTag.textContent = "Normal";
+      else difficultyTag.textContent = "Svår";
+    }
+
+    function renderEnemy() {
+      if (!currentEnemy) {
+        enemyNameEl.textContent = "Ingen fiende just nu";
+        enemyDescEl.textContent = "";
+        enemyStatsEl.textContent = "";
+        enemyHpBar.style.width = "0%";
+        return;
+      }
+      enemyNameEl.textContent = currentEnemy.name + (currentEnemy.boss ? " (BOSS)" : "");
+      enemyDescEl.textContent = currentEnemy.desc;
+      const eff = getEffectiveStats(currentEnemy);
+      enemyStatsEl.textContent = `HP: ${currentEnemy.hp}/${currentEnemy.maxHp} · ATK: ${eff.atk} · DEF: ${eff.def}`;
+      enemyHpBar.style.width = `${(currentEnemy.hp / currentEnemy.maxHp) * 100}%`;
+    }
+
+    function renderActions() {
+      actionsEl.innerHTML = "";
+      if (!inCombat) {
+        const exploreBtn = createActionButton("Utforska", () => {
+          exploreZone();
+        });
+        const restBtn = createActionButton("Vila", () => {
+          rest();
+        });
+        const travelBtn = createActionButton("Res till zon", () => {
+          travelMenu();
+        });
+        actionsEl.appendChild(exploreBtn);
+        actionsEl.appendChild(restBtn);
+        actionsEl.appendChild(travelBtn);
+      } else {
+        if (turn === "player") {
+          const attackBtn = createActionButton("Attackera", () => {
+            playerAttack();
+          });
+          const skillBtn = createActionButton("Använd skill", () => {
+            skillMenu();
+          });
+          const itemBtn = createActionButton("Använd föremål", () => {
+            itemMenu();
+          });
+          const fleeBtn = createActionButton("Fly", () => {
+            tryFlee();
+          });
+          actionsEl.appendChild(attackBtn);
+          actionsEl.appendChild(skillBtn);
+          actionsEl.appendChild(itemBtn);
+          actionsEl.appendChild(fleeBtn);
+        } else {
+          const waitBtn = createActionButton("Vänta...", () => {});
+          waitBtn.disabled = true;
+          actionsEl.appendChild(waitBtn);
+        }
+      }
+    }
+
+    function createActionButton(label, onClick) {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.addEventListener("click", onClick);
+      return btn;
+    }
+
+    // =========================
+    // GAME FLOW
+    // =========================
+    function setZone(id) {
+      currentZone = zones.find(z => z.id === id) || zones[0];
+      player.zone = currentZone.id;
+      renderZone();
+      renderActions();
+    }
+
+    function exploreZone() {
+      if (!currentZone) return;
+      log(`🚶 Du utforskar ${currentZone.name}...`);
+      const roll = randInt(1, 10);
+      if (roll <= 4) {
+        log("🌿 Du hittar inget särskilt, men känner att något iakttar dig.");
+      } else if (roll <= 8) {
+        startCombat(randomEnemy());
+      } else {
+        log("🔥 Du känner en tung närvaro... en boss dyker upp!");
+        startCombat(bossEnemy());
+      }
+    }
+
+    function rest() {
+      if (inCombat) return;
+      log("🛏️ Du vilar vid en lägereld. Du återhämtar dig.");
+      const healAmount = Math.floor(player.maxHp * 0.4);
+      healPlayer(healAmount);
+      player.mana = player.maxMana;
+      player.day++;
+      renderPlayer();
+      renderActions();
+    }
+
+    function travelMenu() {
+      actionsEl.innerHTML = "";
+      log("🧭 Vart vill du resa?");
+      zones.forEach(z => {
+        const btn = createActionButton(z.name, () => {
+          setZone(z.id);
+          log(`🧭 Du reser till ${z.name}.`);
+          renderActions();
+        });
+        actionsEl.appendChild(btn);
+      });
+      const backBtn = createActionButton("Tillbaka", () => {
+        renderActions();
+      });
+      actionsEl.appendChild(backBtn);
+    }
+
+    function startCombat(enemy) {
+      currentEnemy = enemy;
+      inCombat = true;
+      turn = "player";
+      log(`⚔️ Du möter ${enemy.boss ? "BOSSEN " : ""}${enemy.name}!`);
+      renderEnemy();
+      renderActions();
+    }
+
+    function endCombat(victory) {
+      inCombat = false;
+      if (victory) {
+        const goldGain = randInt(currentEnemy.goldRange[0], currentEnemy.goldRange[1]);
+        gainGold(goldGain);
+        gainXp(currentEnemy.xp);
+        const loot = randomLoot(currentEnemy);
+        addItem(loot);
+        checkQuestCompletion(currentEnemy);
+        log("⚔️ Striden är över.");
+      } else {
+        log("💀 Du flyr eller faller. Striden är över.");
+      }
+      currentEnemy = null;
+      renderEnemy();
+      renderActions();
+    }
+
+    function playerAttack() {
+      if (!currentEnemy) return;
+      if (hasStatus(player, "rooted")) {
+        log("🌿 Du är fastbunden och missar din runda!");
+        nextTurn();
+        return;
+      }
+      const effPlayer = getEffectiveStats(player);
+      const effEnemy = getEffectiveStats(currentEnemy);
+      const dmg = rollDamage(effPlayer.atk, effEnemy.def, 0.1);
+      currentEnemy.hp -= dmg;
+      log(`🗡️ Du attackerar ${currentEnemy.name} för ${dmg} skada.`);
+      renderEnemy();
+      if (currentEnemy.hp <= 0) {
+        log(`✅ Du besegrar ${currentEnemy.name}!`);
+        endCombat(true);
+      } else {
+        nextTurn();
+      }
+    }
+
+    function skillMenu() {
+      actionsEl.innerHTML = "";
+      if (!player.skills.length) {
+        log("❌ Du har inga aktiva skills ännu.");
+        renderActions();
+        return;
+      }
+      log("📘 Välj en skill:");
+      player.skills.forEach(s => {
+        const btn = createActionButton(`${s.name} (Mana: ${s.manaCost})`, () => {
+          useSkill(s);
+        });
+        actionsEl.appendChild(btn);
+      });
+      const backBtn = createActionButton("Tillbaka", () => {
+        renderActions();
+      });
+      actionsEl.appendChild(backBtn);
+    }
+
+    function useSkill(skill) {
+      if (!currentEnemy) return;
+      if (player.mana < skill.manaCost) {
+        log("❌ Inte tillräckligt med mana.");
+        return;
+      }
+      if (hasStatus(player, "rooted")) {
+        log("🌿 Du är fastbunden och missar din runda!");
+        nextTurn();
+        return;
+      }
+      player.mana -= skill.manaCost;
+      skill.use(currentEnemy);
+      renderPlayer();
+      renderEnemy();
+      if (currentEnemy.hp <= 0) {
+        log(`✅ Du besegrar ${currentEnemy.name}!`);
+        endCombat(true);
+      } else {
+        nextTurn();
+      }
+    }
+
+    function itemMenu() {
+      actionsEl.innerHTML = "";
+      const consumables = player.inventory.filter(i => i.type === "consumable");
+      if (!consumables.length) {
+        log("❌ Du har inga användbara föremål.");
+        renderActions();
+        return;
+      }
+      log("🎒 Välj ett föremål att använda:");
+      consumables.forEach((item, index) => {
+        const btn = createActionButton(`${item.name}`, () => {
+          useItem(item, index);
+        });
+        actionsEl.appendChild(btn);
+      });
+      const backBtn = createActionButton("Tillbaka", () => {
+        renderActions();
+      });
+      actionsEl.appendChild(backBtn);
+    }
+
+    function useItem(item, index) {
+      if (item.type === "consumable") {
+        if (item.heal) {
+          healPlayer(item.heal);
+        }
+        player.inventory.splice(player.inventory.indexOf(item), 1);
+        renderInventory();
+        nextTurn();
+      }
+    }
+
+    function tryFlee() {
+      if (!currentEnemy) return;
+      if (currentEnemy.boss) {
+        log("❌ Du kan inte fly från en boss!");
+        nextTurn();
+        return;
+      }
+      const chance = 0.5;
+      if (Math.random() < chance) {
+        log("🏃 Du lyckas fly!");
+        endCombat(false);
+      } else {
+        log("❌ Du misslyckas med att fly.");
+        nextTurn();
+      }
+    }
+
+    function nextTurn() {
+      if (!inCombat || !currentEnemy) return;
+      if (turn === "player") {
+        turn = "enemy";
+        renderActions();
+        setTimeout(enemyTurn, 600);
+      } else {
+        turn = "player";
+        renderActions();
+      }
+    }
+
+    function enemyTurn() {
+      if (!currentEnemy || !inCombat) return;
+      applyStatusEffects(player);
+      if (player.hp <= 0) {
+        log("💀 Du dör.");
+        player.alive = false;
+        renderPlayer();
+        inCombat = false;
+        renderActions();
+        return;
+      }
+      applyStatusEffects(currentEnemy);
+      if (currentEnemy.hp <= 0) {
+        log(`✅ ${currentEnemy.name} dör av sina effekter!`);
+        endCombat(true);
+        return;
+      }
+      if (hasStatus(player, "deathMark")) {
+        log("☠️ Dödsmärket bränner på din hud.");
+      }
+      const effEnemy = getEffectiveStats(currentEnemy);
+      const effPlayer = getEffectiveStats(player);
+
+      if (currentEnemy.skills && currentEnemy.skills.length && Math.random() < 0.6) {
+        const skillId = currentEnemy.skills[randInt(0, currentEnemy.skills.length - 1)];
+        const fn = enemySkills[skillId];
+        if (fn) {
+          fn(currentEnemy, player);
+        } else {
+          const dmg = rollDamage(effEnemy.atk, effPlayer.def, 0.05);
+          player.hp -= dmg;
+          log(`⚔️ ${currentEnemy.name} attackerar dig för ${dmg} skada.`);
+        }
+      } else {
+        const dmg = rollDamage(effEnemy.atk, effPlayer.def, 0.05);
+        player.hp -= dmg;
+        log(`⚔️ ${currentEnemy.name} attackerar dig för ${dmg} skada.`);
+      }
+
+      renderPlayer();
+      if (player.hp <= 0) {
+        log("💀 Du dör.");
+        player.alive = false;
+        inCombat = false;
+        renderActions();
+        return;
+      }
+      nextTurn();
+    }
+
+    // =========================
+    // SHOP
+    // =========================
+    function showShop(npc) {
+      actionsEl.innerHTML = "";
+      npc.stock.forEach(item => {
+        const rarityClass = rarityColors[item.rarity || "common"];
+        const btn = createActionButton(
+          `${item.name} (${item.cost}g)`,
+          () => {
+            if (player.gold < item.cost) {
+              log("❌ Du har inte råd.");
+              return;
+            }
+            player.gold -= item.cost;
+            addItem({ ...item });
+            renderPlayer();
+          }
+        );
+        btn.innerHTML = `<span class="tag ${rarityClass}">${item.rarity}</span> ${item.name} (${item.cost}g)`;
+        actionsEl.appendChild(btn);
+      });
+      const backBtn = createActionButton("Tillbaka", () => {
+        renderActions();
+      });
+      actionsEl.appendChild(backBtn);
+    }
+
+    // =========================
+    // INIT
+    // =========================
+    function init() {
+      setZone("Start");
+      renderPlayer();
+      renderInventory();
+      renderSkills();
+      renderNPCs();
+      renderQuests();
+      renderEnemy();
+      renderActions();
+      log("🔥 Välkommen till 'Jag vill slåss' – RPG‑läget.");
+      log("Prata med NPC:er, utforska zoner, möt bossar, samla loot och levla.");
+    }
+
+    init();
+  </script>
+</body>
+</html>
