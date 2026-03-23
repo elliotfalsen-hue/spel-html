@@ -1,187 +1,852 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Projection Sorcery Demo</title>
+<title>Projection Sorcerer Parody – Overkill Version</title>
 <style>
-  body { margin:0; background:#0a0a0f; color:white; text-align:center; }
-  canvas { background:#111; display:block; margin:20px auto; border:2px solid #555; }
+  body {
+    margin: 0;
+    background: #05050a;
+    color: #fff;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  #ui {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+  canvas {
+    display: block;
+    margin: 10px auto;
+    background: radial-gradient(circle at top, #222 0, #000 60%);
+    border: 2px solid #555;
+  }
+  .barContainer {
+    width: 260px;
+    height: 14px;
+    border: 1px solid #fff;
+    background: #300;
+    position: relative;
+    margin: 4px;
+  }
+  .barFill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+  }
+  #pHpFill { background: #0f0; }
+  #eHpFill { background: #f00; }
+  #pSpFill { background: #00bfff; }
+  #comboText {
+    font-size: 18px;
+    margin-top: 4px;
+    min-height: 22px;
+  }
 </style>
 </head>
 <body>
 
-<h2>Projection Sorcery – 24 FPS Technique</h2>
-<p>A/D = Move • W = Jump • J = Attack • K = Projection Dash</p>
+<h1>Projection Sorcerer Parody – 24 FPS Combat Engine</h1>
 
-<canvas id="game" width="800" height="400"></canvas>
+<div id="ui">
+  <div style="display:flex;justify-content:center;gap:40px;">
+    <div>
+      Player HP
+      <div class="barContainer"><div id="pHpFill" class="barFill"></div></div>
+      Special
+      <div class="barContainer"><div id="pSpFill" class="barFill"></div></div>
+    </div>
+    <div>
+      Enemy HP
+      <div class="barContainer"><div id="eHpFill" class="barFill"></div></div>
+    </div>
+  </div>
+  <div id="comboText"></div>
+  <div>
+    Controls: A/D = move, W = jump, J = light, K = heavy, L = dash, I = parry, U = super
+  </div>
+</div>
+
+<canvas id="game" width="960" height="480"></canvas>
 
 <script>
+// =========================================================
+// Core setup
+// =========================================================
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+// Fixed 24 FPS
 const FPS = 24;
 const STEP = 1000 / FPS;
 
+// World
+const GROUND_Y = canvas.height - 60;
+const GRAVITY = 0.9;
+
+// Screen shake
+let shakeTime = 0;
+let shakeIntensity = 0;
+
+// Slow motion
+let slowMoTime = 0;
+let slowMoFactor = 1;
+
+// UI elements
+const pHpFill = document.getElementById("pHpFill");
+const eHpFill = document.getElementById("eHpFill");
+const pSpFill = document.getElementById("pSpFill");
+const comboText = document.getElementById("comboText");
+
+// Input
+const keys = {
+  a: false,
+  d: false,
+  w: false,
+  j: false,
+  k: false,
+  l: false,
+  i: false,
+  u: false
+};
+
+document.addEventListener("keydown", e => {
+  const k = e.key.toLowerCase();
+  if (keys.hasOwnProperty(k)) {
+    keys[k] = true;
+  }
+});
+
+document.addEventListener("keyup", e => {
+  const k = e.key.toLowerCase();
+  if (keys.hasOwnProperty(k)) {
+    keys[k] = false;
+  }
+});
+
+// =========================================================
+// Utility functions
+// =========================================================
+function clamp(v, min, max) {
+  return v < min ? min : v > max ? max : v;
+}
+
+function rectOverlap(a, b) {
+  return !(
+    a.x + a.w < b.x ||
+    a.x > b.x + b.w ||
+    a.y + a.h < b.y ||
+    a.y > b.y + b.h
+  );
+}
+
+function randRange(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+// =========================================================
+// Hit spark system
+// =========================================================
+const sparks = [];
+
+function spawnSpark(x, y, color) {
+  for (let i = 0; i < 6; i++) {
+    sparks.push({
+      x: x,
+      y: y,
+      vx: randRange(-3, 3),
+      vy: randRange(-3, -1),
+      life: 12,
+      color: color
+    });
+  }
+}
+
+function updateSparks() {
+  for (const s of sparks) {
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy += 0.2;
+    s.life--;
+  }
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    if (sparks[i].life <= 0) sparks.splice(i, 1);
+  }
+}
+
+function drawSparks() {
+  for (const s of sparks) {
+    const alpha = s.life / 12;
+    ctx.fillStyle = `rgba(${s.color.r},${s.color.g},${s.color.b},${alpha})`;
+    ctx.fillRect(s.x, s.y, 3, 3);
+  }
+}
+
+// =========================================================
+// Afterimage system
+// =========================================================
+class Afterimage {
+  constructor(x, y, w, h, color, facing) {
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.color = color;
+    this.facing = facing;
+    this.alpha = 0.5;
+  }
+  update() {
+    this.alpha -= 0.05;
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+    ctx.restore();
+  }
+}
+
+const afterimages = [];
+
+function updateAfterimages() {
+  for (const a of afterimages) {
+    a.update();
+  }
+  for (let i = afterimages.length - 1; i >= 0; i--) {
+    if (afterimages[i].alpha <= 0) afterimages.splice(i, 1);
+  }
+}
+
+function drawAfterimages() {
+  for (const a of afterimages) {
+    a.draw();
+  }
+}
+
+// =========================================================
+// Fighter base class
+// =========================================================
 class Fighter {
-  constructor(x, y, color) {
+  constructor(x, y, colorBody, colorAura) {
     this.x = x;
     this.y = y;
     this.w = 40;
-    this.h = 80;
-    this.color = color;
+    this.h = 90;
 
     this.vx = 0;
     this.vy = 0;
-    this.onGround = false;
 
     this.facing = 1;
-    this.after = [];
-    this.isAttacking = false;
-    this.attackTimer = 0;
+
+    this.colorBody = colorBody;
+    this.colorAura = colorAura;
+
+    this.hp = 100;
+    this.maxHp = 100;
+
+    this.sp = 0;
+    this.maxSp = 100;
+
+    this.state = "idle"; // idle, run, jump, attack, hitstun, parry, super
+    this.stateTimer = 0;
+
+    this.onGround = false;
+
+    this.comboCount = 0;
+    this.comboTimer = 0;
+
+    this.parryWindow = 0;
+    this.parrySuccessTimer = 0;
+
+    this.stunTimer = 0;
+
+    this.attackHitbox = null;
+    this.attackDamage = 0;
+    this.attackType = "";
   }
 
   get hitbox() {
-    return { x: this.x, y: this.y, w: this.w, h: this.h };
-  }
-
-  get attackBox() {
     return {
-      x: this.x + (this.facing === 1 ? this.w : -30),
-      y: this.y + 20,
-      w: 30,
-      h: 20
+      x: this.x,
+      y: this.y,
+      w: this.w,
+      h: this.h
     };
   }
 
-  projectionDash() {
-    // Snap forward several frames instantly (Projection Sorcery effect)
-    const burst = 18;
-    this.x += this.facing * burst;
-
-    // Add strong afterimages
-    for (let i = 0; i < 4; i++) {
-      this.after.push({ x: this.x - this.facing * i * 6, y: this.y, alpha: 0.4 - i * 0.1 });
-    }
+  centerX() {
+    return this.x + this.w / 2;
   }
 
-  attack() {
-    this.isAttacking = true;
-    this.attackTimer = 6; // 6 frames at 24fps
+  centerY() {
+    return this.y + this.h / 2;
   }
 
-  update() {
-    // Gravity
-    this.vy += 0.7;
-    this.y += this.vy;
+  applyGravity() {
+    this.vy += GRAVITY;
+  }
+
+  applyMovement() {
     this.x += this.vx;
+    this.y += this.vy;
 
-    // Ground
-    const ground = canvas.height - 40;
-    if (this.y + this.h > ground) {
-      this.y = ground - this.h;
+    if (this.y + this.h > GROUND_Y) {
+      this.y = GROUND_Y - this.h;
       this.vy = 0;
       this.onGround = true;
     } else {
       this.onGround = false;
     }
 
-    // Attack timer
-    if (this.isAttacking) {
-      this.attackTimer--;
-      if (this.attackTimer <= 0) this.isAttacking = false;
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.w > canvas.width) this.x = canvas.width - this.w;
+  }
+
+  takeDamage(amount, type, knockbackX, knockbackY) {
+    if (this.hp <= 0) return;
+
+    this.hp -= amount;
+    if (this.hp < 0) this.hp = 0;
+
+    this.vx = knockbackX;
+    this.vy = knockbackY;
+
+    this.state = "hitstun";
+    this.stateTimer = 18;
+
+    this.stunTimer = 18;
+
+    shakeTime = 10;
+    shakeIntensity = 6;
+
+    if (type === "counter") {
+      slowMoTime = 20;
+      slowMoFactor = 0.4;
+    }
+  }
+
+  gainSp(amount) {
+    this.sp += amount;
+    if (this.sp > this.maxSp) this.sp = this.maxSp;
+  }
+
+  spendSp(amount) {
+    if (this.sp >= amount) {
+      this.sp -= amount;
+      return true;
+    }
+    return false;
+  }
+
+  addAfterimage() {
+    afterimages.push(
+      new Afterimage(
+        this.x,
+        this.y,
+        this.w,
+        this.h,
+        "rgba(120,200,255,1)",
+        this.facing
+      )
+    );
+  }
+
+  updateCombo() {
+    if (this.comboTimer > 0) {
+      this.comboTimer--;
+      if (this.comboTimer <= 0) {
+        this.comboCount = 0;
+      }
+    }
+  }
+
+  registerHit(damage) {
+    this.comboCount++;
+    this.comboTimer = 40;
+    this.gainSp(damage * 0.8);
+  }
+
+  updateParry() {
+    if (this.parryWindow > 0) {
+      this.parryWindow--;
+    }
+    if (this.parrySuccessTimer > 0) {
+      this.parrySuccessTimer--;
+    }
+  }
+
+  drawBase() {
+    ctx.fillStyle = this.colorBody;
+    ctx.fillRect(this.x, this.y, this.w, this.h);
+
+    ctx.fillStyle = "#f5e0c8";
+    ctx.fillRect(this.x + 8, this.y - 18, 24, 18);
+
+    ctx.strokeStyle = this.colorAura;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(this.x - 4, this.y - 22, this.w + 8, this.h + 26);
+
+    if (this.parrySuccessTimer > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = "#00ffff";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(this.centerX(), this.centerY(), 40, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawAttackBox() {
+    if (this.attackHitbox) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = "rgba(255,100,150,0.7)";
+      ctx.fillRect(
+        this.attackHitbox.x,
+        this.attackHitbox.y,
+        this.attackHitbox.w,
+        this.attackHitbox.h
+      );
+      ctx.restore();
+    }
+  }
+}
+
+// =========================================================
+// Player class with Projection Sorcery attacks
+// =========================================================
+class Player extends Fighter {
+  constructor(x, y) {
+    super(x, y, "#4da6ff", "rgba(0,255,255,0.7)");
+  }
+
+  handleInput() {
+    if (this.hp <= 0) return;
+
+    if (this.state === "hitstun" || this.state === "super") return;
+
+    if (keys.i && this.parryWindow <= 0) {
+      this.state = "parry";
+      this.stateTimer = 10;
+      this.parryWindow = 10;
+      return;
     }
 
-    // Afterimages fade
-    this.after.forEach(a => a.alpha -= 0.05);
-    this.after = this.after.filter(a => a.alpha > 0);
+    if (keys.u && this.sp >= 80 && this.state !== "super") {
+      this.state = "super";
+      this.stateTimer = 60;
+      this.spendSp(80);
+      shakeTime = 30;
+      shakeIntensity = 10;
+      return;
+    }
+
+    if (this.state === "attack") return;
+
+    let moving = false;
+    this.vx = 0;
+
+    if (keys.a) {
+      this.vx = -5;
+      this.facing = -1;
+      moving = true;
+    }
+    if (keys.d) {
+      this.vx = 5;
+      this.facing = 1;
+      moving = true;
+    }
+
+    if (keys.w && this.onGround) {
+      this.vy = -18;
+      this.onGround = false;
+      this.state = "jump";
+      this.stateTimer = 12;
+    }
+
+    if (keys.l) {
+      const dashDistance = 26;
+      this.x += this.facing * dashDistance;
+      this.addAfterimage();
+      this.addAfterimage();
+      this.addAfterimage();
+      this.state = "attack";
+      this.stateTimer = 10;
+      this.attackType = "dash";
+      const atkW = 40;
+      const atkH = 30;
+      const atkX =
+        this.facing === 1 ? this.x + this.w : this.x - atkW;
+      const atkY = this.y + 20;
+      this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+      this.attackDamage = 8;
+      return;
+    }
+
+    if (keys.j) {
+      this.state = "attack";
+      this.stateTimer = 12;
+      this.attackType = "light";
+      const atkW = 40;
+      const atkH = 30;
+      const atkX =
+        this.facing === 1 ? this.x + this.w : this.x - atkW;
+      const atkY = this.y + 20;
+      this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+      this.attackDamage = 5;
+      return;
+    }
+
+    if (keys.k) {
+      this.state = "attack";
+      this.stateTimer = 18;
+      this.attackType = "heavy";
+      const atkW = 50;
+      const atkH = 40;
+      const atkX =
+        this.facing === 1 ? this.x + this.w : this.x - atkW;
+      const atkY = this.y + 10;
+      this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+      this.attackDamage = 10;
+      return;
+    }
+
+    if (moving && this.onGround) {
+      this.state = "run";
+    } else if (this.onGround) {
+      this.state = "idle";
+    }
+  }
+
+  updateState() {
+    if (this.stateTimer > 0) {
+      this.stateTimer--;
+    }
+
+    if (this.state === "attack" && this.stateTimer <= 0) {
+      this.attackHitbox = null;
+      this.state = this.onGround ? "idle" : "jump";
+    }
+
+    if (this.state === "hitstun" && this.stateTimer <= 0) {
+      this.state = this.onGround ? "idle" : "jump";
+    }
+
+    if (this.state === "parry" && this.stateTimer <= 0) {
+      this.state = this.onGround ? "idle" : "jump";
+    }
+
+    if (this.state === "super" && this.stateTimer <= 0) {
+      this.state = this.onGround ? "idle" : "jump";
+    }
+  }
+
+  onSuccessfulParry() {
+    this.parrySuccessTimer = 20;
+    this.gainSp(20);
+    shakeTime = 15;
+    shakeIntensity = 8;
+    slowMoTime = 20;
+    slowMoFactor = 0.4;
   }
 
   draw() {
-    // Afterimages
-    for (const a of this.after) {
-      ctx.fillStyle = `rgba(100,200,255,${a.alpha})`;
-      ctx.fillRect(a.x, a.y, this.w, this.h);
+    this.drawBase();
+    this.drawAttackBox();
+  }
+}
+
+// =========================================================
+// Enemy class – Brute fighter with patterns
+// =========================================================
+class Enemy extends Fighter {
+  constructor(x, y) {
+    super(x, y, "#ff4d4d", "rgba(255,80,80,0.7)");
+    this.aiTimer = 0;
+    this.aiState = "approach";
+  }
+
+  updateAI(player) {
+    if (this.hp <= 0) return;
+
+    if (this.state === "hitstun" || this.state === "super") {
+      return;
     }
 
-    // Body
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.w, this.h);
+    this.aiTimer--;
+    if (this.aiTimer <= 0) {
+      this.aiTimer = 20 + Math.floor(Math.random() * 20);
+      const r = Math.random();
+      if (r < 0.5) {
+        this.aiState = "approach";
+      } else if (r < 0.7) {
+        this.aiState = "poke";
+      } else if (r < 0.9) {
+        this.aiState = "heavy";
+      } else {
+        this.aiState = "dash";
+      }
+    }
 
-    // Attack box (debug)
-    if (this.isAttacking) {
-      const atk = this.attackBox;
-      ctx.fillStyle = "rgba(255,100,150,0.5)";
-      ctx.fillRect(atk.x, atk.y, atk.w, atk.h);
+    const dx = player.centerX() - this.centerX();
+    this.facing = dx >= 0 ? 1 : -1;
+
+    if (this.aiState === "approach") {
+      if (Math.abs(dx) > 120) {
+        this.vx = Math.sign(dx) * 3;
+      } else {
+        this.vx = 0;
+      }
+    } else if (this.aiState === "poke") {
+      if (Math.abs(dx) < 140) {
+        this.state = "attack";
+        this.stateTimer = 14;
+        this.attackType = "light";
+        const atkW = 40;
+        const atkH = 30;
+        const atkX =
+          this.facing === 1 ? this.x + this.w : this.x - atkW;
+        const atkY = this.y + 20;
+        this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        this.attackDamage = 4;
+      }
+    } else if (this.aiState === "heavy") {
+      if (Math.abs(dx) < 160) {
+        this.state = "attack";
+        this.stateTimer = 20;
+        this.attackType = "heavy";
+        const atkW = 60;
+        const atkH = 40;
+        const atkX =
+          this.facing === 1 ? this.x + this.w : this.x - atkW;
+        const atkY = this.y + 10;
+        this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        this.attackDamage = 9;
+      }
+    } else if (this.aiState === "dash") {
+      if (Math.abs(dx) < 220) {
+        const dashDistance = 22;
+        this.x += this.facing * dashDistance;
+        this.state = "attack";
+        this.stateTimer = 12;
+        this.attackType = "dash";
+        const atkW = 40;
+        const atkH = 30;
+        const atkX =
+          this.facing === 1 ? this.x + this.w : this.x - atkW;
+        const atkY = this.y + 20;
+        this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        this.attackDamage = 7;
+      }
+    }
+  }
+
+  updateState() {
+    if (this.stateTimer > 0) {
+      this.stateTimer--;
+    }
+
+    if (this.state === "attack" && this.stateTimer <= 0) {
+      this.attackHitbox = null;
+      this.state = this.onGround ? "idle" : "jump";
+    }
+
+    if (this.state === "hitstun" && this.stateTimer <= 0) {
+      this.state = this.onGround ? "idle" : "jump";
+    }
+  }
+
+  draw() {
+    this.drawBase();
+    this.drawAttackBox();
+  }
+}
+
+// =========================================================
+// Instantiate fighters
+// =========================================================
+const player = new Player(200, 200);
+const enemy = new Enemy(650, 200);
+
+// =========================================================
+// Combat resolution
+// =========================================================
+function handleCombat() {
+  if (player.attackHitbox && enemy.hp > 0) {
+    if (rectOverlap(player.attackHitbox, enemy.hitbox)) {
+      const isCounter = enemy.state === "attack";
+      const type = isCounter ? "counter" : "normal";
+      const dmg = player.attackDamage + (isCounter ? 4 : 0);
+      const kbX = player.facing * 6;
+      const kbY = -6;
+      enemy.takeDamage(dmg, type, kbX, kbY);
+      player.registerHit(dmg);
+      spawnSpark(enemy.centerX(), enemy.centerY(), { r: 255, g: 200, b: 200 });
+      player.attackHitbox = null;
+    }
+  }
+
+  if (enemy.attackHitbox && player.hp > 0) {
+    if (rectOverlap(enemy.attackHitbox, player.hitbox)) {
+      if (player.parryWindow > 0) {
+        enemy.takeDamage(10, "counter", -enemy.facing * 8, -8);
+        player.onSuccessfulParry();
+        spawnSpark(player.centerX(), player.centerY(), { r: 150, g: 255, b: 255 });
+        enemy.attackHitbox = null;
+      } else {
+        const isCounter = player.state === "attack";
+        const type = isCounter ? "counter" : "normal";
+        const dmg = enemy.attackDamage + (isCounter ? 3 : 0);
+        const kbX = enemy.facing * 6;
+        const kbY = -6;
+        player.takeDamage(dmg, type, kbX, kbY);
+        enemy.registerHit(dmg);
+        spawnSpark(player.centerX(), player.centerY(), { r: 255, g: 150, b: 150 });
+        enemy.attackHitbox = null;
+      }
+    }
+  }
+
+  if (player.state === "super" && player.stateTimer % 6 === 0) {
+    const atkW = 80;
+    const atkH = 60;
+    const atkX =
+      player.facing === 1 ? player.x + player.w : player.x - atkW;
+    const atkY = player.y + 10;
+    const box = { x: atkX, y: atkY, w: atkW, h: atkH };
+    if (rectOverlap(box, enemy.hitbox) && enemy.hp > 0) {
+      enemy.takeDamage(3, "normal", player.facing * 4, -4);
+      player.registerHit(3);
+      spawnSpark(enemy.centerX(), enemy.centerY(), { r: 255, g: 255, b: 200 });
     }
   }
 }
 
-const player = new Fighter(150, 200, "#4da6ff");
-const enemy = new Fighter(600, 200, "#ff4d4d");
+// =========================================================
+// UI update
+// =========================================================
+function updateUI() {
+  pHpFill.style.width = (player.hp / player.maxHp * 100) + "%";
+  eHpFill.style.width = (enemy.hp / enemy.maxHp * 100) + "%";
+  pSpFill.style.width = (player.sp / player.maxSp * 100) + "%";
 
-const keys = { a:false, d:false, w:false, j:false, k:false };
-
-document.addEventListener("keydown", e => {
-  if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-});
-document.addEventListener("keyup", e => {
-  if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-});
-
-function updatePlayer() {
-  player.vx = 0;
-
-  if (keys.a) { player.vx = -4; player.facing = -1; }
-  if (keys.d) { player.vx = 4; player.facing = 1; }
-
-  if (keys.w && player.onGround) player.vy = -14;
-
-  if (keys.k) player.projectionDash();
-  if (keys.j) player.attack();
-
-  player.update();
+  if (player.comboCount > 1 && player.comboTimer > 0) {
+    comboText.textContent = player.comboCount + " HIT PROJECTION COMBO";
+  } else {
+    comboText.textContent = "";
+  }
 }
 
-function updateEnemy() {
-  // Simple dummy AI
-  const dx = player.x - enemy.x;
-  enemy.vx = Math.sign(dx) * 2;
-  enemy.facing = dx >= 0 ? 1 : -1;
+// =========================================================
+// Main update & draw
+// =========================================================
+function update() {
+  let factor = slowMoFactor;
+  if (slowMoTime <= 0) {
+    factor = 1;
+  } else {
+    slowMoTime--;
+    if (slowMoTime <= 0) {
+      slowMoFactor = 1;
+      factor = 1;
+    }
+  }
 
-  enemy.update();
+  player.applyGravity();
+  enemy.applyGravity();
+
+  player.handleInput();
+  enemy.updateAI(player);
+
+  player.applyMovement();
+  enemy.applyMovement();
+
+  player.updateState();
+  enemy.updateState();
+
+  player.updateCombo();
+  enemy.updateCombo();
+
+  player.updateParry();
+  enemy.updateParry();
+
+  handleCombat();
+
+  updateSparks();
+  updateAfterimages();
+
+  updateUI();
 }
 
 function draw() {
+  let offsetX = 0;
+  let offsetY = 0;
+  if (shakeTime > 0) {
+    shakeTime--;
+    offsetX = randRange(-shakeIntensity, shakeIntensity);
+    offsetY = randRange(-shakeIntensity, shakeIntensity);
+  }
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Ground
-  ctx.fillStyle = "#222";
-  ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.05)";
+  for (let i = 0; i < canvas.width; i += 40) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + 40, canvas.height);
+    ctx.stroke();
+  }
+
+  drawAfterimages();
+  drawSparks();
 
   player.draw();
   enemy.draw();
+
+  if (player.hp <= 0 || enemy.hp <= 0) {
+    ctx.fillStyle = "#fff";
+    ctx.font = "32px sans-serif";
+    ctx.textAlign = "center";
+    const msg = player.hp <= 0 ? "Brute Fighter Wins" : "Projection Sorcerer Wins";
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+  }
+
+  ctx.restore();
 }
 
-let last = performance.now();
-let acc = 0;
+// =========================================================
+// Game loop – fixed 24 FPS
+// =========================================================
+let lastTime = performance.now();
+let accumulator = 0;
 
-function loop(now) {
-  const delta = now - last;
-  last = now;
-  acc += delta;
+function gameLoop(now) {
+  const delta = now - lastTime;
+  lastTime = now;
+  accumulator += delta;
 
-  while (acc >= STEP) {
-    updatePlayer();
-    updateEnemy();
-    acc -= STEP;
+  while (accumulator >= STEP) {
+    update();
+    accumulator -= STEP;
   }
 
   draw();
-  requestAnimationFrame(loop);
+  requestAnimationFrame(gameLoop);
 }
 
-requestAnimationFrame(loop);
+requestAnimationFrame(gameLoop);
 </script>
+
 </body>
 </html>
 
