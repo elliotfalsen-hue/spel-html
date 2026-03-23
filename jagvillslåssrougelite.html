@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jag vill inte slåss – Roguelite</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #151515 0, #050509 55%, #000 100%);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    h1 {
+      margin-bottom: 2px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 1.4rem;
+    }
+
+    h2 {
+      font-size: 0.85rem;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-bottom: 10px;
+    }
+
+    #gameContainer {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    canvas {
+      border-radius: 10px;
+      background: #050608;
+      box-shadow: 0 0 24px rgba(0,0,0,0.9);
+      image-rendering: pixelated;
+    }
+
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      max-width: 720px;
+    }
+
+    #topStats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      font-size: 0.85rem;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .label {
+      opacity: 0.8;
+    }
+
+    #message {
+      min-height: 22px;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    #controls {
+      font-size: 0.8rem;
+      opacity: 0.75;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    button {
+      margin-top: 4px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      background: #2f7d32;
+      color: #fff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:hover {
+      background: #3fa343;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #dialogBox {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #f5f5f5;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-width: 280px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 10;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    #overlay.visible {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    #overlay h3 {
+      margin-bottom: 6px;
+    }
+
+    #overlay p {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      max-width: 360px;
+    }
+
+    #overlayChoices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    #metaPanel {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      opacity: 0.8;
+      text-align: center;
+    }
+
+    #peaceMeterBar, #stressMeterBar {
+      width: 120px;
+      height: 8px;
+      border-radius: 999px;
+      background: #333;
+      overflow: hidden;
+      border: 1px solid #555;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    #peaceMeterFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4caf50, #8bc34a);
+      transition: width 0.15s;
+    }
+
+    #stressMeterFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ff7043, #ff1744);
+      transition: width 0.15s;
+    }
+
+    .pill {
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 0.7rem;
+      opacity: 0.9;
+    }
+
+    .pill-passive {
+      border-color: #81c784;
+      color: #c8e6c9;
+    }
+
+    .pill-curse {
+      border-color: #ef9a9a;
+      color: #ffcdd2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Jag vill inte slåss</h1>
+  <h2>Roguelite-pacifist – varje run är ny, men du vill fortfarande inte slåss</h2>
+
+  <div id="gameContainer">
+    <canvas id="game" width="640" height="360"></canvas>
+    <div id="dialogBox"></div>
+    <div id="overlay">
+      <h3 id="overlayTitle"></h3>
+      <p id="overlayText"></p>
+      <div id="overlayChoices"></div>
+      <button id="overlayMainBtn">Fortsätt</button>
+    </div>
+  </div>
+
+  <div id="ui">
+    <div id="topStats">
+      <div><span class="label">Dag:</span> <span id="day">1</span></div>
+      <div><span class="label">Rum:</span> <span id="room">1</span></div>
+      <div><span class="label">Run-tid:</span> <span id="time">0.0</span>s</div>
+      <div><span class="label">Hjärtan:</span> <span id="hearts">0</span></div>
+      <div><span class="label">Fiender lugnade:</span> <span id="calmed">0</span></div>
+      <div>
+        <span class="label">Fred:</span>
+        <div id="peaceMeterBar"><div id="peaceMeterFill"></div></div>
+      </div>
+      <div>
+        <span class="label">Stress:</span>
+        <div id="stressMeterBar"><div id="stressMeterFill"></div></div>
+      </div>
+    </div>
+    <div id="message"></div>
+    <div id="controls">
+      WASD eller piltangenter för att röra dig. <br />
+      Gå nära fiender för att lugna dem – men rör dem inte. <br />
+      Samla hjärtan, aktivera lugn-zoner, hitta utgången i varje rum. <br />
+      Välj uppgraderingar mellan rum. Dör du, börjar en ny run – men du lär dig. <br />
+      Tryck <b>R</b> för att starta om runnen.
+    </div>
+    <button id="startBtn">Starta ny run</button>
+    <div id="metaPanel">
+      <span class="pill pill-passive" id="passivesInfo">Inga passiva ännu</span>
+      &nbsp;
+      <span class="pill pill-curse" id="cursesInfo">Inga bördor ännu</span>
+    </div>
+  </div>
+
+  <script>
+    // --- Canvas & DOM ---
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const dayEl = document.getElementById("day");
+    const roomEl = document.getElementById("room");
+    const timeEl = document.getElementById("time");
+    const heartsEl = document.getElementById("hearts");
+    const calmedEl = document.getElementById("calmed");
+    const messageEl = document.getElementById("message");
+    const dialogBox = document.getElementById("dialogBox");
+    const peaceFill = document.getElementById("peaceMeterFill");
+    const stressFill = document.getElementById("stressMeterFill");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const overlayChoices = document.getElementById("overlayChoices");
+    const overlayMainBtn = document.getElementById("overlayMainBtn");
+    const startBtn = document.getElementById("startBtn");
+    const passivesInfo = document.getElementById("passivesInfo");
+    const cursesInfo = document.getElementById("cursesInfo");
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    // --- Input ---
+    const keys = {};
+    window.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === "r" || e.key === "R") {
+        if (!running) startRun();
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    // --- Game state ---
+    let running = false;
+    let lastTime = 0;
+    let runTime = 0;
+
+    let day = 1;
+    let roomIndex = 1;
+
+    let player;
+    let enemies = [];
+    let hearts = [];
+    let calmZones = [];
+    let exitPortal = null;
+    let walls = [];
+
+    let collectedHearts = 0;
+    let enemiesCalmed = 0;
+
+    let peace = 0;   // 0–1
+    let stress = 0;  // 0–1
+
+    let dialogTimer = 0;
+
+    let gameOver = false;
+    let choosingUpgrade = false;
+
+    // Roguelite meta
+    let passives = [];
+    let curses = [];
+
+    // --- Utility ---
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function randInt(min, max) {
+      return Math.floor(rand(min, max + 1));
+    }
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function showMessage(text, duration = 3) {
+      messageEl.textContent = text;
+      if (duration > 0) {
+        setTimeout(() => {
+          if (messageEl.textContent === text) messageEl.textContent = "";
+        }, duration * 1000);
+      }
+    }
+
+    function showDialog(text, duration = 2.5) {
+      dialogBox.textContent = text;
+      dialogBox.style.opacity = 1;
+      dialogTimer = duration;
+    }
+
+    function updateMeters() {
+      peace = Math.max(0, Math.min(1, peace));
+      stress = Math.max(0, Math.min(1, stress));
+      peaceFill.style.width = (peace * 100).toFixed(1) + "%";
+      stressFill.style.width = (stress * 100).toFixed(1) + "%";
+    }
+
+    function showOverlay(title, text, options = null, mainLabel = "Fortsätt") {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      overlayChoices.innerHTML = "";
+      choosingUpgrade = !!options;
+      if (options && options.length) {
+        options.forEach((opt, i) => {
+          const btn = document.createElement("button");
+          btn.textContent = opt.label;
+          btn.addEventListener("click", () => {
+            opt.onChoose();
+          });
+          overlayChoices.appendChild(btn);
+        });
+      }
+      overlayMainBtn.textContent = mainLabel;
+      overlay.classList.add("visible");
+    }
+
+    function hideOverlay() {
+      overlay.classList.remove("visible");
+      overlayChoices.innerHTML = "";
+      choosingUpgrade = false;
+    }
+
+    overlayMainBtn.addEventListener("click", () => {
+      if (!choosingUpgrade) {
+        hideOverlay();
+        if (gameOver) {
+          // after death
+          gameOver = false;
+        } else {
+          // continue run
+          running = true;
+          lastTime = performance.now();
+          requestAnimationFrame(loop);
+        }
+      }
+    });
+
+    startBtn.addEventListener("click", startRun);
+
+    function updatePassivesInfo() {
+      if (!passives.length) {
+        passivesInfo.textContent = "Inga passiva ännu";
+      } else {
+        passivesInfo.textContent = "Passiva: " + passives.map(p => p.name).join(", ");
+      }
+    }
+
+    function updateCursesInfo() {
+      if (!curses.length) {
+        cursesInfo.textContent = "Inga bördor ännu";
+      } else {
+        cursesInfo.textContent = "Bördor: " + curses.map(c => c.name).join(", ");
+      }
+    }
+
+    // --- Entities ---
+    function createPlayer() {
+      return {
+        x: WIDTH / 2,
+        y: HEIGHT / 2,
+        r: 10,
+        baseSpeed: 120,
+        speedBonus: 0,
+        calmAura: 0, // extra calm radius
+        stressResist: 0,
+        vx: 0,
+        vy: 0,
+        color: "#4caf50",
+        hp: 3,
+        maxHp: 3,
+        invuln: 0,
+      };
+    }
+
+    function createEnemy(type) {
+      const margin = 40;
+      const x = rand(margin, WIDTH - margin);
+      const y = rand(margin, HEIGHT - margin);
+      const base = {
+        x,
+        y,
+        r: 9,
+        vx: 0,
+        vy: 0,
+        angry: true,
+        calm: false,
+        peaceful: false,
+        calmTimer: 0,
+        colorAngry: "#e53935",
+        colorCalm: "#ffeb3b",
+        colorPeace: "#90caf9",
+        type,
+        stressAura: 0.03 + day * 0.005,
+        speed: 60 + day * 5,
+      };
+
+      if (type === "snabb") {
+        base.speed *= 1.4;
+        base.r = 8;
+      } else if (type === "tung") {
+        base.speed *= 0.7;
+        base.r = 11;
+        base.stressAura *= 1.4;
+      } else if (type === "orolig") {
+        base.speed *= 1.1;
+        base.stressAura *= 1.8;
+      }
+
+      return base;
+    }
+
+    function createHeart() {
+      return {
+        x: rand(40, WIDTH - 40),
+        y: rand(40, HEIGHT - 40),
+        r: 6,
+        pulse: Math.random() * Math.PI * 2,
+      };
+    }
+
+    function createCalmZone() {
+      return {
+        x: rand(60, WIDTH - 60),
+        y: rand(40, HEIGHT - 40),
+        r: rand(20, 30),
+        strength: rand(0.03, 0.06),
+      };
+    }
+
+    function createExitPortal() {
+      return {
+        x: rand(60, WIDTH - 60),
+        y: rand(40, HEIGHT - 40),
+        r: 14,
+        pulse: Math.random() * Math.PI * 2,
+      };
+    }
+
+    function createWalls() {
+      const segments = [];
+      const count = randInt(3, 7);
+      for (let i = 0; i < count; i++) {
+        const w = rand(60, 140);
+        const h = rand(20, 60);
+        const x = rand(40, WIDTH - 40 - w);
+        const y = rand(40, HEIGHT - 40 - h);
+        segments.push({ x, y, w, h });
+      }
+      return segments;
+    }
+
+    // --- Collision helpers ---
+    function circleRectCollision(circle, rect) {
+      const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+      const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+      const dx = circle.x - closestX;
+      const dy = circle.y - closestY;
+      return dx * dx + dy * dy < circle.r * circle.r;
+    }
+
+    function resolvePlayerWallCollision(p, rect) {
+      const overlapX1 = p.x + p.r - rect.x;
+      const overlapX2 = rect.x + rect.w - (p.x - p.r);
+      const overlapY1 = p.y + p.r - rect.y;
+      const overlapY2 = rect.y + rect.h - (p.y - p.r);
+
+      const minOverlapX = Math.min(overlapX1, overlapX2);
+      const minOverlapY = Math.min(overlapY1, overlapY2);
+
+      if (minOverlapX < minOverlapY) {
+        if (overlapX1 < overlapX2) {
+          p.x = rect.x - p.r;
+        } else {
+          p.x = rect.x + rect.w + p.r;
+        }
+      } else {
+        if (overlapY1 < overlapY2) {
+          p.y = rect.y - p.r;
+        } else {
+          p.y = rect.y + rect.h + p.r;
+        }
+      }
+    }
+
+    // --- Roguelite upgrades ---
+    const passivePool = [
+      {
+        name: "Djup Andning",
+        desc: "Lugn-zoner fyller mer fred.",
+        apply() {
+          calmZones.forEach(z => z.strength *= 1.2);
+          passives.push(this);
+        }
+      },
+      {
+        name: "Snabba Steg",
+        desc: "Du rör dig snabbare.",
+        apply() {
+          player.speedBonus += 30;
+          passives.push(this);
+        }
+      },
+      {
+        name: "Mjuk Röst",
+        desc: "Större räckvidd för att lugna fiender.",
+        apply() {
+          player.calmAura += 20;
+          passives.push(this);
+        }
+      },
+      {
+        name: "Tjock Hud",
+        desc: "Stress påverkar dig mindre.",
+        apply() {
+          player.stressResist += 0.2;
+          passives.push(this);
+        }
+      },
+      {
+        name: "Varm Närvaro",
+        desc: "Fiender lugnas lite snabbare när du är nära.",
+        apply() {
+          passives.push(this);
+        }
+      }
+    ];
+
+    const cursePool = [
+      {
+        name: "Oro i Luften",
+        desc: "Fiender ger mer stress när de är nära.",
+        apply() {
+          enemies.forEach(e => e.stressAura *= 1.3);
+          curses.push(this);
+        }
+      },
+      {
+        name: "Tunga Tankar",
+        desc: "Du rör dig lite långsammare.",
+        apply() {
+          player.baseSpeed -= 15;
+          curses.push(this);
+        }
+      },
+      {
+        name: "Kort Andning",
+        desc: "Lugn-zoner är svagare.",
+        apply() {
+          calmZones.forEach(z => z.strength *= 0.8);
+          curses.push(this);
+        }
+      }
+    ];
+
+    function chooseRandomUpgrades() {
+      const options = [];
+      const shuffledPassives = [...passivePool].sort(() => Math.random() - 0.5);
+      const shuffledCurses = [...cursePool].sort(() => Math.random() - 0.5);
+
+      const p1 = shuffledPassives[0];
+      const p2 = shuffledPassives[1];
+      const c1 = shuffledCurses[0];
+
+      if (p1) {
+        options.push({
+          label: `+ ${p1.name}`,
+          onChoose() {
+            p1.apply();
+            updatePassivesInfo();
+            hideOverlay();
+            running = true;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          }
+        });
+      }
+
+      if (p2) {
+        options.push({
+          label: `+ ${p2.name}`,
+          onChoose() {
+            p2.apply();
+            updatePassivesInfo();
+            hideOverlay();
+            running = true;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          }
+        });
+      }
+
+      if (c1) {
+        options.push({
+          label: `Ta en börda: ${c1.name}`,
+          onChoose() {
+            c1.apply();
+            updateCursesInfo();
+            hideOverlay();
+            running = true;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          }
+        });
+      }
+
+      return options;
+    }
+
+    // --- Room generation ---
+    function generateRoom() {
+      enemies = [];
+      hearts = [];
+      calmZones = [];
+      walls = createWalls();
+      exitPortal = createExitPortal();
+
+      const enemyCount = 4 + day + roomIndex;
+      const heartCount = 4 + Math.floor((day + roomIndex) / 2);
+      const calmCount = 2 + Math.floor((day + roomIndex) / 3);
+
+      const enemyTypes = ["vanlig", "snabb", "tung", "orolig"];
+
+      for (let i = 0; i < enemyCount; i++) {
+        const type = enemyTypes[randInt(0, enemyTypes.length - 1)];
+        enemies.push(createEnemy(type));
+      }
+      for (let i = 0; i < heartCount; i++) hearts.push(createHeart());
+      for (let i = 0; i < calmCount; i++) calmZones.push(createCalmZone());
+
+      showMessage(
+        `Dag ${day}, rum ${roomIndex}: Du vill fortfarande inte slåss.`,
+        4
+      );
+    }
+
+    // --- Run control ---
+    function startRun() {
+      running = true;
+      gameOver = false;
+      choosingUpgrade = false;
+      hideOverlay();
+
+      day = 1;
+      roomIndex = 1;
+      runTime = 0;
+      collectedHearts = 0;
+      enemiesCalmed = 0;
+      peace = 0;
+      stress = 0;
+      passives = [];
+      curses = [];
+      updatePassivesInfo();
+      updateCursesInfo();
+      updateMeters();
+
+      player = createPlayer();
+      generateRoom();
+
+      dayEl.textContent = day;
+      roomEl.textContent = roomIndex;
+      heartsEl.textContent = collectedHearts;
+      calmedEl.textContent = enemiesCalmed;
+
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function nextRoom() {
+      roomIndex++;
+      if (roomIndex > 4) {
+        day++;
+        roomIndex = 1;
+        showDialog("En ny dag. Du bär med dig det du lärt dig.");
+      }
+      dayEl.textContent = day;
+      roomEl.textContent = roomIndex;
+      generateRoom();
+    }
+
+    function endRun(reason) {
+      running = false;
+      gameOver = true;
+      let summary =
+        `Run över. Dag ${day}, rum ${roomIndex}. ` +
+        `Hjärtan: ${collectedHearts}, fiender lugnade: ${enemiesCalmed}.`;
+
+      if (reason === "stress") {
+        showOverlay(
+          "Du orkade inte mer",
+          summary + " Stressen blev för hög. Du ville inte slåss, men det blev för mycket.",
+          null,
+          "Ny run"
+        );
+      } else if (reason === "conflict") {
+        showOverlay(
+          "Du hamnade i konflikt",
+          summary + " Du kom för nära. Nästa gång kanske du hittar ett annat sätt.",
+          null,
+          "Ny run"
+        );
+      } else if (reason === "victory") {
+        showOverlay(
+          "Du höll fast vid 'jag vill inte slåss'",
+          summary + " Du tog dig igenom flera dagar utan att slåss. Det är en seger i sig.",
+          null,
+          "Ny run"
+        );
+      }
+
+      overlayMainBtn.onclick = () => {
+        hideOverlay();
+        startRun();
+      };
+    }
+
+    // --- Update ---
+    function update(dt) {
+      if (!running) return;
+
+      runTime += dt;
+      timeEl.textContent = runTime.toFixed(1);
+
+      // Dialog fade
+      if (dialogTimer > 0) {
+        dialogTimer -= dt;
+        if (dialogTimer <= 0) {
+          dialogBox.style.opacity = 0;
+        }
+      }
+
+      // Player movement
+      let ax = 0;
+      let ay = 0;
+      if (keys["w"] || keys["arrowup"]) ay -= 1;
+      if (keys["s"] || keys["arrowdown"]) ay += 1;
+      if (keys["a"] || keys["arrowleft"]) ax -= 1;
+      if (keys["d"] || keys["arrowright"]) ax += 1;
+
+      const len = Math.hypot(ax, ay) || 1;
+      ax /= len;
+      ay /= len;
+
+      const speed = player.baseSpeed + player.speedBonus;
+      player.vx = ax * speed;
+      player.vy = ay * speed;
+
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      // Clamp to bounds
+      player.x = Math.max(player.r, Math.min(WIDTH - player.r, player.x));
+      player.y = Math.max(player.r, Math.min(HEIGHT - player.r, player.y));
+
+      // Wall collisions
+      walls.forEach(w => {
+        if (circleRectCollision(player, w)) {
+          resolvePlayerWallCollision(player, w);
+        }
+      });
+
+      // Calm zones
+      calmZones.forEach((cz) => {
+        const d = dist(player, cz);
+        if (d < cz.r + 10) {
+          peace += cz.strength * dt;
+          stress -= cz.strength * 0.6 * dt;
+          if (Math.random() < 0.02) {
+            showDialog("Du andas djupt. Du vill inte slåss.");
+          }
+        }
+      });
+
+      // Exit portal
+      if (exitPortal) {
+        const d = dist(player, exitPortal);
+        if (d < player.r + exitPortal.r) {
+          running = false;
+          // Between rooms: choose upgrades
+          const options = chooseRandomUpgrades();
+          showOverlay(
+            "Du hittade en väg vidare",
+            "Välj något du tar med dig till nästa rum. Du slåss inte – du växer.",
+            options,
+            "Skippa"
+          );
+          overlayMainBtn.onclick = () => {
+            hideOverlay();
+            nextRoom();
+            running = true;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          };
+          nextRoom();
+          return;
+        }
+      }
+
+      // Enemies
+      let stressGain = 0;
+      enemies.forEach((e) => {
+        const dToPlayer = dist(e, player);
+        const dirX = player.x - e.x;
+        const dirY = player.y - e.y;
+        const len = Math.hypot(dirX, dirY) || 1;
+        const nx = dirX / len;
+        const ny = dirY / len;
+
+        if (e.calm) {
+          const speed = e.speed * 0.4;
+          e.vx = -nx * speed;
+          e.vy = -ny * speed;
+          e.calmTimer -= dt;
+          if (e.calmTimer <= 0) {
+            e.calm = false;
+            e.peaceful = true;
+          }
+        } else if (e.peaceful) {
+          const speed = e.speed * 0.2;
+          e.vx += rand(-1, 1) * 10 * dt;
+          e.vy += rand(-1, 1) * 10 * dt;
+          const vlen = Math.hypot(e.vx, e.vy) || 1;
+          e.vx = (e.vx / vlen) * speed;
+          e.vy = (e.vy / vlen) * speed;
+        } else {
+          const speed = e.speed;
+          e.vx = nx * speed;
+          e.vy = ny * speed;
+        }
+
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+
+        // Walls for enemies
+        walls.forEach(w => {
+          if (circleRectCollision(e, w)) {
+            // simple bounce
+            e.vx *= -0.8;
+            e.vy *= -0.8;
+            e.x += e.vx * dt * 2;
+            e.y += e.vy * dt * 2;
+          }
+        });
+
+        // Bounds
+        if (e.x < e.r || e.x > WIDTH - e.r) e.vx *= -1;
+        if (e.y < e.r || e.y > HEIGHT - e.r) e.vy *= -1;
+        e.x = Math.max(e.r, Math.min(WIDTH - e.r, e.x));
+        e.y = Math.max(e.r, Math.min(HEIGHT - e.r, e.y));
+
+        // Calm enemies if player is close but not touching
+        const calmRadius = 70 + player.calmAura;
+        if (dToPlayer < calmRadius && dToPlayer > player.r + e.r + 4 && !e.peaceful && !e.calm) {
+          if (Math.random() < 0.03) {
+            e.calm = true;
+            e.calmTimer = rand(3, 6);
+            e.angry = false;
+            enemiesCalmed++;
+            calmedEl.textContent = enemiesCalmed;
+            peace += 0.05;
+            stress -= 0.03;
+            showDialog("Jag vill inte slåss. Kan vi bara prata?");
+          }
+        }
+
+        // Stress aura
+        if (!e.peaceful && dToPlayer < 120) {
+          stressGain += e.stressAura * dt;
+        }
+
+        // Direct conflict
+        if (dToPlayer < player.r + e.r) {
+          if (player.invuln <= 0) {
+            player.hp -= 1;
+            player.invuln = 1.2;
+            stress += 0.15;
+            showDialog("Det blev för nära. Du ville inte slåss.");
+            if (player.hp <= 0) {
+              endRun("conflict");
+            }
+          }
+        }
+      });
+
+      // Hearts
+      hearts.forEach((h) => {
+        h.pulse += dt * 4;
+      });
+
+      hearts = hearts.filter((h) => {
+        const d = dist(player, h);
+        if (d < player.r + h.r + 4) {
+          collectedHearts++;
+          heartsEl.textContent = collectedHearts;
+          peace += 0.04;
+          stress -= 0.03;
+          if (Math.random() < 0.5) {
+            showDialog("Du väljer omtanke framför våld.");
+          }
+          return false;
+        }
+        return true;
+      });
+
+      // Stress & peace
+      stress += stressGain * (1 - player.stressResist);
+      stress -= 0.02 * dt; // natural recovery
+      peace -= 0.01 * dt;  // peace slowly fades if you don't nurture it
+      updateMeters();
+
+      // Player invulnerability timer
+      if (player.invuln > 0) {
+        player.invuln -= dt;
+      }
+
+      // Lose by stress
+      if (stress >= 1) {
+        endRun("stress");
+      }
+
+      // Soft win condition: survive long enough with high peace
+      if (runTime > 300 && peace > 0.7) {
+        endRun("victory");
+      }
+    }
+
+    // --- Render ---
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      // Background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+      bgGrad.addColorStop(0, "#050608");
+      bgGrad.addColorStop(1, "#101018");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // Subtle grid
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < WIDTH; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, HEIGHT);
+        ctx.stroke();
+      }
+      for (let y = 0; y < HEIGHT; y += 32) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(WIDTH, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Walls
+      ctx.save();
+      walls.forEach(w => {
+        const g = ctx.createLinearGradient(w.x, w.y, w.x + w.w, w.y + w.h);
+        g.addColorStop(0, "#212121");
+        g.addColorStop(1, "#424242");
+        ctx.fillStyle = g;
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.strokeRect(w.x, w.y, w.w, w.h);
+      });
+      ctx.restore();
+
+      // Calm zones
+      calmZones.forEach((cz) => {
+        const gradient = ctx.createRadialGradient(
+          cz.x,
+          cz.y,
+          0,
+          cz.x,
+          cz.y,
+          cz.r * 1.6
+        );
+        gradient.addColorStop(0, "rgba(76,175,80,0.35)");
+        gradient.addColorStop(1, "rgba(76,175,80,0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cz.x, cz.y, cz.r * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(129,199,132,0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cz.x, cz.y, cz.r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      // Exit portal
+      if (exitPortal) {
+        exitPortal.pulse += 0.05;
+        const s = 1 + Math.sin(exitPortal.pulse) * 0.1;
+        ctx.save();
+        ctx.translate(exitPortal.x, exitPortal.y);
+        ctx.scale(s, s);
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, exitPortal.r * 1.6);
+        g.addColorStop(0, "rgba(144,202,249,0.7)");
+        g.addColorStop(1, "rgba(144,202,249,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, exitPortal.r * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#90caf9";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, exitPortal.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Hearts
+      hearts.forEach((h) => {
+        const scale = 1 + Math.sin(h.pulse) * 0.15;
+        const size = h.r * scale;
+        ctx.save();
+        ctx.translate(h.x, h.y);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#ff5252";
+        ctx.beginPath();
+        ctx.moveTo(0, size / 2);
+        ctx.bezierCurveTo(
+          size,
+          -size / 2,
+          size * 1.5,
+          size / 2,
+          0,
+          size * 1.4
+        );
+        ctx.bezierCurveTo(
+          -size * 1.5,
+          size / 2,
+          -size,
+          -size / 2,
+          0,
+          size / 2
+        );
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Enemies
+      enemies.forEach((e) => {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        let color = e.colorAngry;
+        if (e.calm) color = e.colorCalm;
+        else if (e.peaceful) color = e.colorPeace;
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+        ctx.arc(3, -2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mouth
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (e.angry && !e.calm && !e.peaceful) {
+          ctx.moveTo(-4, 4);
+          ctx.lineTo(4, 2);
+        } else if (e.calm) {
+          ctx.moveTo(-4, 4);
+          ctx.quadraticCurveTo(0, 6, 4, 4);
+        } else {
+          ctx.moveTo(-4, 4);
+          ctx.quadraticCurveTo(0, 2, 4, 4);
+        }
+        ctx.stroke();
+
+        ctx.restore();
+      });
+
+      // Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = player.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Player face
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+      ctx.arc(3, -2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-4, 4);
+      ctx.quadraticCurveTo(0, 5, 4, 4);
+      ctx.stroke();
+
+      // HP pips
+      for (let i = 0; i < player.maxHp; i++) {
+        ctx.fillStyle = i < player.hp ? "#ff8a80" : "rgba(255,255,255,0.15)";
+        ctx.beginPath();
+        ctx.arc(-player.r + i * 4, -player.r - 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Calm aura hint
+      if (player.calmAura > 0) {
+        ctx.strokeStyle = "rgba(129,199,132,0.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 70 + player.calmAura, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      // Border
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, WIDTH - 2, HEIGHT - 2);
+    }
+
+    // --- Main loop ---
+    function loop(timestamp) {
+      if (!running) return;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      update(dt);
+      draw();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Initial static frame
+    player = createPlayer();
+    generateRoom();
+    draw();
+    showMessage("Tryck på 'Starta ny run' eller R för att börja.", 6);
+  </script>
+</body>
+</html>
+```
