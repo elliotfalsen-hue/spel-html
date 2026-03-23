@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jag vill slåss – Orbitals Roguelite</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #151515 0, #050509 55%, #000 100%);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    h1 {
+      margin-bottom: 2px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 1.5rem;
+    }
+
+    h2 {
+      font-size: 0.9rem;
+      font-weight: 400;
+      opacity: 0.85;
+      margin-bottom: 10px;
+    }
+
+    #gameContainer {
+      position: relative;
+      margin-top: 8px;
+    }
+
+    canvas {
+      border-radius: 10px;
+      background: #050608;
+      box-shadow: 0 0 24px rgba(0,0,0,0.9);
+      image-rendering: pixelated;
+    }
+
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      max-width: 900px;
+    }
+
+    #topStats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      font-size: 0.85rem;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .label {
+      opacity: 0.8;
+    }
+
+    #message {
+      min-height: 22px;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    #controls {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    button {
+      margin-top: 4px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      background: #2f7d32;
+      color: #fff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:hover {
+      background: #3fa343;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #dialogBox {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.85);
+      color: #f5f5f5;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-width: 320px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 10;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    #overlay.visible {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    #overlay h3 {
+      margin-bottom: 6px;
+    }
+
+    #overlay p {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      max-width: 480px;
+    }
+
+    #overlayChoices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
+
+    #overlayMainBtn {
+      margin-top: 4px;
+    }
+
+    .card {
+      width: 200px;
+      background: linear-gradient(145deg, #1f1f1f, #101010);
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      cursor: pointer;
+      text-align: left;
+      transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 16px rgba(0,0,0,0.9);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .card-emoji {
+      font-size: 1.4rem;
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .card-desc {
+      font-size: 0.8rem;
+      opacity: 0.9;
+    }
+
+    .card-type {
+      font-size: 0.7rem;
+      opacity: 0.7;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .card-passive {
+      border-color: #81c784;
+    }
+
+    .card-curse {
+      border-color: #ef9a9a;
+    }
+
+    #metaPanel {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      opacity: 0.9;
+      text-align: center;
+    }
+
+    #metaPanel span {
+      margin: 0 4px;
+    }
+
+    #hpBarOuter, #xpBarOuter {
+      width: 140px;
+      height: 8px;
+      border-radius: 999px;
+      background: #333;
+      overflow: hidden;
+      border: 1px solid #555;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    #hpBarInner {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ff8a80, #ff5252);
+      transition: width 0.15s;
+    }
+
+    #xpBarInner {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #64b5f6, #2196f3);
+      transition: width 0.15s;
+    }
+
+    #goldIcon {
+      margin-right: 2px;
+    }
+
+    #goldAmount {
+      font-weight: 600;
+    }
+
+    #weaponInfo, #orbitalsInfo, #cursesInfo {
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 0.7rem;
+      opacity: 0.9;
+      display: inline-block;
+      margin-top: 2px;
+    }
+
+    #weaponInfo {
+      border-color: #ffeb3b;
+      color: #fff9c4;
+    }
+
+    #orbitalsInfo {
+      border-color: #81c784;
+      color: #c8e6c9;
+    }
+
+    #cursesInfo {
+      border-color: #ef9a9a;
+      color: #ffcdd2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Jag vill slåss</h1>
+  <h2>Orbitals roguelite – sköldar, svärd, eldklot och drönare som snurrar runt dig</h2>
+
+  <div id="gameContainer">
+    <canvas id="game" width="720" height="405"></canvas>
+    <div id="dialogBox"></div>
+    <div id="overlay">
+      <h3 id="overlayTitle"></h3>
+      <p id="overlayText"></p>
+      <div id="overlayChoices"></div>
+      <button id="overlayMainBtn">Fortsätt</button>
+    </div>
+  </div>
+
+  <div id="ui">
+    <div id="topStats">
+      <div><span class="label">Dag:</span> <span id="day">1</span></div>
+      <div><span class="label">Rum:</span> <span id="room">1</span></div>
+      <div><span class="label">Run-tid:</span> <span id="time">0.0</span>s</div>
+      <div>
+        <span class="label">HP:</span>
+        <div id="hpBarOuter"><div id="hpBarInner"></div></div>
+      </div>
+      <div>
+        <span class="label">XP:</span>
+        <div id="xpBarOuter"><div id="xpBarInner"></div></div>
+      </div>
+      <div>
+        <span id="goldIcon">🪙</span><span id="goldAmount">0</span>
+      </div>
+      <div><span class="label">Fiender besegrade:</span> <span id="kills">0</span></div>
+      <div><span class="label">Skott:</span> <span id="shots">0</span></div>
+    </div>
+    <div id="message"></div>
+    <div id="controls">
+      WASD eller piltangenter för att röra dig. <br />
+      Sikta med musen, vänsterklick eller mellanslag för att skjuta. <br />
+      Orbitals (sköldar, svärd, eldklot, drönare) snurrar runt dig och hjälper dig. <br />
+      Rensa rummet, gå in i portalen, välj kort. Bygg din egen kaos‑build. <br />
+      Tryck <b>R</b> för att starta om.
+    </div>
+    <button id="startBtn">Starta ny run</button>
+    <div id="metaPanel">
+      <span id="weaponInfo">Vapen: Enkel pilbåge</span>
+      <span id="orbitalsInfo">Orbitals: inga ännu</span>
+      <span id="cursesInfo">Inga bördor ännu</span>
+    </div>
+  </div>
+
+  <script>
+    // --- Canvas & DOM ---
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const dayEl = document.getElementById("day");
+    const roomEl = document.getElementById("room");
+    const timeEl = document.getElementById("time");
+    const goldAmountEl = document.getElementById("goldAmount");
+    const killsEl = document.getElementById("kills");
+    const shotsEl = document.getElementById("shots");
+    const messageEl = document.getElementById("message");
+    const dialogBox = document.getElementById("dialogBox");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const overlayChoices = document.getElementById("overlayChoices");
+    const overlayMainBtn = document.getElementById("overlayMainBtn");
+    const startBtn = document.getElementById("startBtn");
+    const hpBarInner = document.getElementById("hpBarInner");
+    const xpBarInner = document.getElementById("xpBarInner");
+    const weaponInfo = document.getElementById("weaponInfo");
+    const orbitalsInfo = document.getElementById("orbitalsInfo");
+    const cursesInfo = document.getElementById("cursesInfo");
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    // --- Input ---
+    const keys = {};
+    let mouseX = WIDTH / 2;
+    let mouseY = HEIGHT / 2;
+    let mouseDown = false;
+
+    window.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === "r" || e.key === "R") {
+        if (!running) startRun();
+      }
+      if (e.key === " " && running) {
+        tryShoot();
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener("mousedown", () => {
+      mouseDown = true;
+      if (running) tryShoot();
+    });
+
+    canvas.addEventListener("mouseup", () => {
+      mouseDown = false;
+    });
+
+    // --- Game state ---
+    let running = false;
+    let lastTime = 0;
+    let runTime = 0;
+
+    let day = 1;
+    let roomIndex = 1;
+
+    let player;
+    let enemies = [];
+    let projectiles = [];
+    let enemyProjectiles = [];
+    let pickups = [];
+    let walls = [];
+    let exitPortal = null;
+
+    let gold = 0;
+    let kills = 0;
+    let shots = 0;
+
+    let dialogTimer = 0;
+    let gameOver = false;
+    let choosingCards = false;
+
+    // meta
+    let curses = [];
+    let orbitals = []; // synliga objekt som snurrar runt spelaren
+
+    // --- Utility ---
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function randInt(min, max) {
+      return Math.floor(rand(min, max + 1));
+    }
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function showMessage(text, duration = 3) {
+      messageEl.textContent = text;
+      if (duration > 0) {
+        setTimeout(() => {
+          if (messageEl.textContent === text) messageEl.textContent = "";
+        }, duration * 1000);
+      }
+    }
+
+    function showDialog(text, duration = 2.5) {
+      dialogBox.textContent = text;
+      dialogBox.style.opacity = 1;
+      dialogTimer = duration;
+    }
+
+    function showOverlay(title, text, cards = null, mainLabel = "Fortsätt") {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      overlayChoices.innerHTML = "";
+      choosingCards = !!cards;
+      if (cards && cards.length) {
+        cards.forEach((card) => {
+          const el = document.createElement("div");
+          el.className = "card " + (card.type === "curse" ? "card-curse" : "card-passive");
+          el.innerHTML = `
+            <div class="card-emoji">${card.emoji}</div>
+            <div class="card-title">${card.title}</div>
+            <div class="card-type">${card.type === "curse" ? "Börda" : "Kort"}</div>
+            <div class="card-desc">${card.desc}</div>
+          `;
+          el.addEventListener("click", () => {
+            card.onChoose();
+          });
+          overlayChoices.appendChild(el);
+        });
+      }
+      overlayMainBtn.textContent = mainLabel;
+      overlay.classList.add("visible");
+    }
+
+    function hideOverlay() {
+      overlay.classList.remove("visible");
+      overlayChoices.innerHTML = "";
+      choosingCards = false;
+    }
+
+    overlayMainBtn.addEventListener("click", () => {
+      if (!choosingCards) {
+        hideOverlay();
+        if (gameOver) {
+          gameOver = false;
+        } else {
+          running = true;
+          lastTime = performance.now();
+          requestAnimationFrame(loop);
+        }
+      }
+    });
+
+    startBtn.addEventListener("click", startRun);
+
+    function updateHpBar() {
+      const pct = (player.hp / player.maxHp) * 100;
+      hpBarInner.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function updateXpBar() {
+      const pct = (player.xp / player.xpToNext) * 100;
+      xpBarInner.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function updateMetaTexts() {
+      weaponInfo.textContent = `Vapen: ${player.weaponName}`;
+      if (!orbitals.length) {
+        orbitalsInfo.textContent = "Orbitals: inga ännu";
+      } else {
+        orbitalsInfo.textContent =
+          "Orbitals: " +
+          orbitals
+            .map(o => `${o.emoji} ${o.name} Lv.${o.level}/${o.maxLevel}`)
+            .join(" | ");
+      }
+      if (!curses.length) {
+        cursesInfo.textContent = "Inga bördor ännu";
+      } else {
+        cursesInfo.textContent =
+          "Bördor: " + curses.map(c => `${c.emoji} ${c.title}`).join(", ");
+      }
+    }
+
+    // --- Entities ---
+    function createPlayer() {
+      return {
+        x: WIDTH / 2,
+        y: HEIGHT / 2,
+        r: 11,
+        baseSpeed: 150,
+        speedBonus: 0,
+        hp: 5,
+        maxHp: 5,
+        armor: 0,
+        damage: 12,
+        critChance: 0.05,
+        attackCooldown: 0.35,
+        attackTimer: 0,
+        projectileSpeed: 260,
+        projectileSize: 4,
+        weaponName: "Enkel pilbåge",
+        xp: 0,
+        xpToNext: 40,
+        level: 1,
+        invuln: 0,
+      };
+    }
+
+    function createEnemy(type) {
+      const margin = 50;
+      const x = rand(margin, WIDTH - margin);
+      const y = rand(margin, HEIGHT - margin);
+      const base = {
+        x,
+        y,
+        r: 10,
+        vx: 0,
+        vy: 0,
+        type,
+        hp: 20,
+        maxHp: 20,
+        speed: 70 + day * 4,
+        color: "#e53935",
+        shootTimer: 0,
+        shootCooldown: 1.8,
+        ranged: false,
+        xpValue: 8,
+        goldValue: 2,
+      };
+
+      if (type === "snabb") {
+        base.speed *= 1.4;
+        base.r = 9;
+        base.hp = base.maxHp = 16;
+        base.color = "#ff7043";
+      } else if (type === "tung") {
+        base.speed *= 0.7;
+        base.r = 12;
+        base.hp = base.maxHp = 35;
+        base.color = "#8d6e63";
+        base.goldValue = 4;
+      } else if (type === "skytt") {
+        base.speed *= 0.8;
+        base.ranged = true;
+        base.shootCooldown = 1.4;
+        base.hp = base.maxHp = 18;
+        base.color = "#42a5f5";
+        base.xpValue = 10;
+      } else if (type === "elite") {
+        base.speed *= 1.2;
+        base.r = 13;
+        base.hp = base.maxHp = 50;
+        base.color = "#ab47bc";
+        base.ranged = true;
+        base.shootCooldown = 1.2;
+        base.xpValue = 18;
+        base.goldValue = 6;
+      }
+
+      return base;
+    }
+
+    function createProjectile(x, y, angle, speed, damage, fromPlayer = true, size = 4) {
+      return {
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: size,
+        damage,
+        fromPlayer,
+        life: 3,
+      };
+    }
+
+    function createPickup(x, y, kind) {
+      return {
+        x,
+        y,
+        r: 7,
+        kind, // "gold", "heart", "xp"
+        pulse: Math.random() * Math.PI * 2,
+      };
+    }
+
+    function createExitPortal() {
+      return {
+        x: rand(80, WIDTH - 80),
+        y: rand(60, HEIGHT - 60),
+        r: 16,
+        pulse: Math.random() * Math.PI * 2,
+        active: false,
+      };
+    }
+
+    function createWalls() {
+      const segments = [];
+      const count = randInt(4, 9);
+      for (let i = 0; i < count; i++) {
+        const w = rand(70, 160);
+        const h = rand(30, 80);
+        const x = rand(40, WIDTH - 40 - w);
+        const y = rand(40, HEIGHT - 40 - h);
+        segments.push({ x, y, w, h });
+      }
+      return segments;
+    }
+
+    // --- Orbitals system ---
+    // typer: shield, sword, fireOrb, drone, charm
+    function addOrUpgradeOrbital(id) {
+      const existing = orbitals.find(o => o.id === id);
+      if (!existing) {
+        // skapa ny
+        if (id === "shield") {
+          orbitals.push({
+            id,
+            name: "Gammal Sköld",
+            emoji: "🛡️",
+            level: 1,
+            maxLevel: 5,
+            angle: 0,
+            radius: 26,
+            type: "shield",
+            blockChance: 0.35,
+          });
+        } else if (id === "sword") {
+          orbitals.push({
+            id,
+            name: "Rostigt Svärd",
+            emoji: "⚔️",
+            level: 1,
+            maxLevel: 5,
+            angle: Math.PI / 2,
+            radius: 32,
+            type: "sword",
+            damage: 10,
+          });
+        } else if (id === "fireOrb") {
+          orbitals.push({
+            id,
+            name: "Eldklot",
+            emoji: "🔥",
+            level: 1,
+            maxLevel: 5,
+            angle: Math.PI,
+            radius: 38,
+            type: "fireOrb",
+            shootCooldown: 1.4,
+            shootTimer: 0,
+            damage: 8,
+          });
+        } else if (id === "drone") {
+          orbitals.push({
+            id,
+            name: "Liten Drönare",
+            emoji: "🛸",
+            level: 1,
+            maxLevel: 5,
+            angle: -Math.PI / 2,
+            radius: 44,
+            type: "drone",
+            shootCooldown: 1.0,
+            shootTimer: 0,
+            damage: 6,
+          });
+        } else if (id === "charm") {
+          orbitals.push({
+            id,
+            name: "Turcharm",
+            emoji: "🍀",
+            level: 1,
+            maxLevel: 5,
+            angle: 0,
+            radius: 20,
+            type: "charm",
+            luck: 0.15,
+          });
+        }
+      } else {
+        // uppgradera
+        if (existing.level >= existing.maxLevel) return;
+        existing.level++;
+        if (existing.id === "shield") {
+          existing.blockChance += 0.1;
+          existing.radius += 4;
+          if (existing.level >= 3) {
+            existing.name = "Reflektiv Sköld";
+          }
+          if (existing.level >= 5) {
+            existing.name = "Aegis Sköld";
+          }
+        } else if (existing.id === "sword") {
+          existing.damage += 6;
+          existing.radius += 4;
+          if (existing.level >= 3) {
+            existing.name = "Snurrande Svärd";
+          }
+          if (existing.level >= 5) {
+            existing.name = "Blodtörstigt Svärd";
+          }
+        } else if (existing.id === "fireOrb") {
+          existing.damage += 4;
+          existing.shootCooldown *= 0.9;
+          if (existing.level >= 3) {
+            existing.name = "Inferno‑Orb";
+          }
+          if (existing.level >= 5) {
+            existing.name = "Solflamma";
+          }
+        } else if (existing.id === "drone") {
+          existing.damage += 3;
+          existing.shootCooldown *= 0.9;
+          existing.radius += 4;
+          if (existing.level >= 3) {
+            existing.name = "Attackdrönare";
+          }
+          if (existing.level >= 5) {
+            existing.name = "Stormdrönare";
+          }
+        } else if (existing.id === "charm") {
+          existing.luck += 0.08;
+          if (existing.level >= 3) {
+            existing.name = "Gyllene Turcharm";
+          }
+          if (existing.level >= 5) {
+            existing.name = "Legendarisk Turcharm";
+          }
+        }
+      }
+      updateMetaTexts();
+    }
+
+    // --- Collision helpers ---
+    function circleRectCollision(circle, rect) {
+      const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+      const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+      const dx = circle.x - closestX;
+      const dy = circle.y - closestY;
+      return dx * dx + dy * dy < circle.r * circle.r;
+    }
+
+    function resolvePlayerWallCollision(p, rect) {
+      const overlapX1 = p.x + p.r - rect.x;
+      const overlapX2 = rect.x + rect.w - (p.x - p.r);
+      const overlapY1 = p.y + p.r - rect.y;
+      const overlapY2 = rect.y + rect.h - (p.y - p.r);
+
+      const minOverlapX = Math.min(overlapX1, overlapX2);
+      const minOverlapY = Math.min(overlapY1, overlapY2);
+
+      if (minOverlapX < minOverlapY) {
+        if (overlapX1 < overlapX2) {
+          p.x = rect.x - p.r;
+        } else {
+          p.x = rect.x + rect.w + p.r;
+        }
+      } else {
+        if (overlapY1 < overlapY2) {
+          p.y = rect.y - p.r;
+        } else {
+          p.y = rect.y + rect.h + p.r;
+        }
+      }
+    }
+
+    // --- Card pools ---
+    // Bas‑kort som låser upp orbitals
+    const baseOrbitalCards = [
+      {
+        id: "shield",
+        emoji: "🛡️",
+        title: "Gammal Sköld",
+        desc: "En bucklig sköld som snurrar runt dig och blockar skott.",
+      },
+      {
+        id: "sword",
+        emoji: "⚔️",
+        title: "Rostigt Svärd",
+        desc: "Ett svärd som snurrar runt dig och skadar fiender.",
+      },
+      {
+        id: "fireOrb",
+        emoji: "🔥",
+        title: "Eldklot",
+        desc: "Ett eldklot som skjuter mot närmaste fiende.",
+      },
+      {
+        id: "drone",
+        emoji: "🛸",
+        title: "Liten Drönare",
+        desc: "En drönare som cirklar runt dig och skjuter.",
+      },
+      {
+        id: "charm",
+        emoji: "🍀",
+        title: "Turcharm",
+        desc: "Ökar chansen på bättre drops och crits.",
+      }
+    ];
+
+    // Allmänna vapen/boost‑kort
+    const genericCards = [
+      {
+        emoji: "🏹",
+        title: "Jägarmans Båge",
+        desc: "Bättre båge. +30% projektilhastighet, +20% skada.",
+        type: "passive",
+        apply() {
+          player.projectileSpeed *= 1.3;
+          player.damage *= 1.2;
+          player.weaponName = "Jägarmans Båge";
+        }
+      },
+      {
+        emoji: "👟",
+        title: "Snabba Skor",
+        desc: "Lätta skor. +50 rörelsehastighet.",
+        type: "passive",
+        apply() {
+          player.speedBonus += 50;
+        }
+      },
+      {
+        emoji: "🎯",
+        title: "Fokuserad Blick",
+        desc: "Du ser svagheterna. +10% kritchans.",
+        type: "passive",
+        apply() {
+          player.critChance += 0.10;
+        }
+      },
+      {
+        emoji: "💉",
+        title: "Liten Livstjuv",
+        desc: "Du får ibland tillbaka liv när du dödar fiender.",
+        type: "passive",
+        apply() {
+          player.lifeSteal = (player.lifeSteal || 0) + 0.25;
+        }
+      },
+      {
+        emoji: "🧿",
+        title: "Skyddsamulett",
+        desc: "En amulett som tar smällen. +1 rustning.",
+        type: "passive",
+        apply() {
+          player.armor += 1;
+        }
+      }
+    ];
+
+    const cursePool = [
+      {
+        emoji: "⏳",
+        title: "Tung Tid",
+        desc: "Allt känns segare. -20 rörelsehastighet.",
+        type: "curse",
+        apply() {
+          player.baseSpeed -= 20;
+        }
+      },
+      {
+        emoji: "💔",
+        title: "Sprucket Hjärta",
+        desc: "Du tål mindre. -2 max HP.",
+        type: "curse",
+        apply() {
+          player.maxHp = Math.max(1, player.maxHp - 2);
+          if (player.hp > player.maxHp) player.hp = player.maxHp;
+        }
+      },
+      {
+        emoji: "🎲",
+        title: "Oturens Mynt",
+        desc: "Fiender droppar mindre guld.",
+        type: "curse",
+        apply() {
+          curses.push({
+            emoji: "🎲",
+            title: "Oturens Mynt‑effekt",
+            onGoldGain(amount) {
+              return Math.floor(amount * 0.6);
+            }
+          });
+        }
+      },
+      {
+        emoji: "🌫️",
+        title: "Dimmig Sikt",
+        desc: "Du skjuter lite långsammare. +0.15s attack‑cooldown.",
+        type: "curse",
+        apply() {
+          player.attackCooldown += 0.15;
+        }
+      }
+    ];
+
+    function getRandomCards() {
+      const cards = [];
+
+      // 1–2 kort som är nya orbitals eller uppgraderingar
+      const orbitalCandidates = [];
+
+      baseOrbitalCards.forEach(base => {
+        const existing = orbitals.find(o => o.id === base.id);
+        if (!existing) {
+          orbitalCandidates.push({
+            emoji: base.emoji,
+            title: base.title,
+            desc: base.desc + " (Lv.1/5)",
+            type: "passive",
+            onChoose() {
+              addOrUpgradeOrbital(base.id);
+              hideOverlay();
+              running = true;
+              lastTime = performance.now();
+              requestAnimationFrame(loop);
+            }
+          });
+        } else if (existing.level < existing.maxLevel) {
+          orbitalCandidates.push({
+            emoji: base.emoji,
+            title: `${existing.name} Lv.${existing.level + 1}`,
+            desc: `Uppgradera ${existing.name} till nivå ${existing.level + 1} (max ${existing.maxLevel}).`,
+            type: "passive",
+            onChoose() {
+              addOrUpgradeOrbital(base.id);
+              hideOverlay();
+              running = true;
+              lastTime = performance.now();
+              requestAnimationFrame(loop);
+            }
+          });
+        }
+      });
+
+      orbitalCandidates.sort(() => Math.random() - 0.5);
+      orbitalCandidates.slice(0, 2).forEach(c => cards.push(c));
+
+      // 1 generellt kort
+      const g = genericCards[randInt(0, genericCards.length - 1)];
+      cards.push({
+        emoji: g.emoji,
+        title: g.title,
+        desc: g.desc,
+        type: "passive",
+        onChoose() {
+          g.apply();
+          updateMetaTexts();
+          hideOverlay();
+          running = true;
+          lastTime = performance.now();
+          requestAnimationFrame(loop);
+        }
+      });
+
+      // 1 curse
+      const c1 = cursePool[randInt(0, cursePool.length - 1)];
+      cards.push({
+        emoji: c1.emoji,
+        title: c1.title,
+        desc: c1.desc,
+        type: "curse",
+        onChoose() {
+          c1.apply();
+          curses.push({ emoji: c1.emoji, title: c1.title });
+          updateMetaTexts();
+          hideOverlay();
+          running = true;
+          lastTime = performance.now();
+          requestAnimationFrame(loop);
+        }
+      });
+
+      return cards;
+    }
+
+    // --- Room generation ---
+    function generateRoom() {
+      enemies = [];
+      projectiles = [];
+      enemyProjectiles = [];
+      pickups = [];
+      walls = createWalls();
+      exitPortal = createExitPortal();
+
+      const enemyCount = 5 + day + roomIndex * 2;
+      const types = ["vanlig", "snabb", "tung", "skytt", "elite"];
+
+      for (let i = 0; i < enemyCount; i++) {
+        const t = types[randInt(0, types.length - 1)];
+        enemies.push(createEnemy(t));
+      }
+
+      showMessage(`Dag ${day}, rum ${roomIndex}. Rensa allt.`, 4);
+    }
+
+    // --- Run control ---
+    function startRun() {
+      running = true;
+      gameOver = false;
+      hideOverlay();
+
+      day = 1;
+      roomIndex = 1;
+      runTime = 0;
+      gold = 0;
+      kills = 0;
+      shots = 0;
+      curses = [];
+      orbitals = [];
+
+      player = createPlayer();
+      updateHpBar();
+      updateXpBar();
+      updateMetaTexts();
+
+      generateRoom();
+
+      dayEl.textContent = day;
+      roomEl.textContent = roomIndex;
+      goldAmountEl.textContent = gold;
+      killsEl.textContent = kills;
+      shotsEl.textContent = shots;
+
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+
+    function nextRoom() {
+      roomIndex++;
+      if (roomIndex > 4) {
+        day++;
+        roomIndex = 1;
+        showDialog("Ny dag. Nya rum. Nya orbitals.", 3);
+      }
+      dayEl.textContent = day;
+      roomEl.textContent = roomIndex;
+      generateRoom();
+    }
+
+    function endRun(reason) {
+      running = false;
+      gameOver = true;
+      let summary =
+        `Run över. Dag ${day}, rum ${roomIndex}. ` +
+        `Guld: ${gold}, fiender besegrade: ${kills}.`;
+
+      if (reason === "death") {
+        showOverlay(
+          "Du föll i strid",
+          summary + " Men du kan alltid försöka igen med en ännu sjukare orbital‑build.",
+          null,
+          "Ny run"
+        );
+      } else if (reason === "victory") {
+        showOverlay(
+          "Du rensade allt",
+          summary + " Du tog dig långt. Nästa run kan bli ännu galnare.",
+          null,
+          "Ny run"
+        );
+      }
+
+      overlayMainBtn.onclick = () => {
+        hideOverlay();
+        startRun();
+      };
+    }
+
+    // --- Combat helpers ---
+    function tryShoot() {
+      if (!running) return;
+      if (player.attackTimer > 0) return;
+
+      const dx = mouseX - player.x;
+      const dy = mouseY - player.y;
+      const angle = Math.atan2(dy, dx);
+
+      const proj = createProjectile(
+        player.x,
+        player.y,
+        angle,
+        player.projectileSpeed,
+        player.damage,
+        true,
+        player.projectileSize
+      );
+
+      projectiles.push(proj);
+      player.attackTimer = player.attackCooldown;
+      shots++;
+      shotsEl.textContent = shots;
+    }
+
+    function giveGold(amount) {
+      let finalAmount = amount;
+      curses.forEach(c => {
+        if (c.onGoldGain) {
+          finalAmount = c.onGoldGain(finalAmount);
+        }
+      });
+      gold += finalAmount;
+      goldAmountEl.textContent = gold;
+    }
+
+    function gainXp(amount) {
+      player.xp += amount;
+      while (player.xp >= player.xpToNext) {
+        player.xp -= player.xpToNext;
+        player.level++;
+        player.xpToNext = Math.floor(player.xpToNext * 1.4);
+        showDialog(`Level up! Du är nu nivå ${player.level}.`, 2);
+        player.damage *= 1.08;
+        player.maxHp += 1;
+        player.hp = Math.min(player.maxHp, player.hp + 1);
+      }
+      updateHpBar();
+      updateXpBar();
+    }
+
+    // --- Update ---
+    function update(dt) {
+      if (!running) return;
+
+      runTime += dt;
+      timeEl.textContent = runTime.toFixed(1);
+
+      if (dialogTimer > 0) {
+        dialogTimer -= dt;
+        if (dialogTimer <= 0) {
+          dialogBox.style.opacity = 0;
+        }
+      }
+
+      // Player movement
+      let ax = 0;
+      let ay = 0;
+      if (keys["w"] || keys["arrowup"]) ay -= 1;
+      if (keys["s"] || keys["arrowdown"]) ay += 1;
+      if (keys["a"] || keys["arrowleft"]) ax -= 1;
+      if (keys["d"] || keys["arrowright"]) ax += 1;
+
+      const len = Math.hypot(ax, ay) || 1;
+      ax /= len;
+      ay /= len;
+
+      const speed = player.baseSpeed + player.speedBonus;
+      player.x += ax * speed * dt;
+      player.y += ay * speed * dt;
+
+      // Clamp
+      player.x = Math.max(player.r, Math.min(WIDTH - player.r, player.x));
+      player.y = Math.max(player.r, Math.min(HEIGHT - player.r, player.y));
+
+      // Walls
+      walls.forEach(w => {
+        if (circleRectCollision(player, w)) {
+          resolvePlayerWallCollision(player, w);
+        }
+      });
+
+      // Attack timer
+      if (player.attackTimer > 0) {
+        player.attackTimer -= dt;
+      }
+
+      // Player invuln
+      if (player.invuln > 0) {
+        player.invuln -= dt;
+      }
+
+      // Orbitals rörelse + effekter
+      orbitals.forEach(o => {
+        const spinSpeed =
+          o.type === "sword" ? 3 :
+          o.type === "shield" ? 2 :
+          o.type === "fireOrb" ? 1.8 :
+          o.type === "drone" ? 2.2 :
+          1.5;
+        o.angle += spinSpeed * dt;
+
+        const ox = player.x + Math.cos(o.angle) * o.radius;
+        const oy = player.y + Math.sin(o.angle) * o.radius;
+        o.x = ox;
+        o.y = oy;
+
+        // Sword: melee damage runt dig
+        if (o.type === "sword") {
+          enemies.forEach(e => {
+            const d = Math.hypot(e.x - ox, e.y - oy);
+            if (d < e.r + 6) {
+              e.hp -= o.damage * dt; // kontinuerlig skada
+            }
+          });
+        }
+
+        // Shield: blocka projektiler
+        if (o.type === "shield") {
+          enemyProjectiles.forEach(p => {
+            const d = Math.hypot(p.x - ox, p.y - oy);
+            if (d < o.radius * 0.7) {
+              if (Math.random() < o.blockChance) {
+                p.life = -1; // förstör
+              }
+            }
+          });
+        }
+
+        // Fire orb: skjuter mot närmaste fiende
+        if (o.type === "fireOrb") {
+          o.shootTimer -= dt;
+          if (o.shootTimer <= 0) {
+            o.shootTimer = o.shootCooldown;
+            let target = null;
+            let bestDist = Infinity;
+            enemies.forEach(e => {
+              const d = Math.hypot(e.x - ox, e.y - oy);
+              if (d < bestDist) {
+                bestDist = d;
+                target = e;
+              }
+            });
+            if (target) {
+              const ang = Math.atan2(target.y - oy, target.x - ox);
+              const proj = createProjectile(
+                ox,
+                oy,
+                ang,
+                220,
+                o.damage,
+                true,
+                4
+              );
+              proj.fireTrail = true;
+              projectiles.push(proj);
+            }
+          }
+        }
+
+        // Drone: skjuter snabbare mot närmaste fiende
+        if (o.type === "drone") {
+          o.shootTimer -= dt;
+          if (o.shootTimer <= 0) {
+            o.shootTimer = o.shootCooldown;
+            let target = null;
+            let bestDist = Infinity;
+            enemies.forEach(e => {
+              const d = Math.hypot(e.x - ox, e.y - oy);
+              if (d < bestDist) {
+                bestDist = d;
+                target = e;
+              }
+            });
+            if (target) {
+              const ang = Math.atan2(target.y - oy, target.x - ox);
+              const proj = createProjectile(
+                ox,
+                oy,
+                ang,
+                260,
+                o.damage,
+                true,
+                3
+              );
+              projectiles.push(proj);
+            }
+          }
+        }
+
+        // Charm: påverkar drop‑chans via luck (hanteras i drops)
+      });
+
+      // Projectiles
+      projectiles = projectiles.filter(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+
+        if (p.x < -20 || p.x > WIDTH + 20 || p.y < -20 || p.y > HEIGHT + 20) return false;
+        if (p.life <= 0) return false;
+
+        // walls
+        for (const w of walls) {
+          if (circleRectCollision(p, w)) {
+            return false;
+          }
+        }
+
+        // hit enemy
+        if (p.fromPlayer) {
+          for (const e of enemies) {
+            const d = dist(p, e);
+            if (d < p.r + e.r) {
+              let dmg = p.damage;
+              if (Math.random() < player.critChance) {
+                dmg *= 2;
+                showDialog("Kritisk träff!", 1.2);
+              }
+              e.hp -= dmg;
+
+              if (e.hp <= 0) {
+                kills++;
+                killsEl.textContent = kills;
+                gainXp(e.xpValue);
+                let baseGold = e.goldValue;
+                const charm = orbitals.find(o => o.type === "charm");
+                if (charm) {
+                  baseGold += Math.random() < charm.luck ? 1 : 0;
+                }
+                giveGold(baseGold);
+
+                if (player.lifeSteal && Math.random() < player.lifeSteal) {
+                  player.hp = Math.min(player.maxHp, player.hp + 1);
+                  updateHpBar();
+                }
+
+                // drops
+                let dropLuck = charm ? charm.luck : 0;
+                if (Math.random() < 0.4 + dropLuck * 0.5) {
+                  pickups.push(createPickup(e.x, e.y, "gold"));
+                }
+                if (Math.random() < 0.15 + dropLuck * 0.3) {
+                  pickups.push(createPickup(e.x, e.y, "heart"));
+                }
+                if (Math.random() < 0.25 + dropLuck * 0.4) {
+                  pickups.push(createPickup(e.x, e.y, "xp"));
+                }
+
+                enemies = enemies.filter(en => en !== e);
+              }
+
+              return false;
+            }
+          }
+        } else {
+          // enemy projectile hits player (hanteras i enemyProjectiles, men låter vara här ifall)
+        }
+
+        return true;
+      });
+
+      // Enemy projectiles
+      enemyProjectiles = enemyProjectiles.filter(p => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+
+        if (p.x < -20 || p.x > WIDTH + 20 || p.y < -20 || p.y > HEIGHT + 20) return false;
+        if (p.life <= 0) return false;
+
+        // walls
+        for (const w of walls) {
+          if (circleRectCollision(p, w)) {
+            return false;
+          }
+        }
+
+        // hit player
+        const d = Math.hypot(p.x - player.x, p.y - player.y);
+        if (d < p.r + player.r) {
+          if (player.invuln <= 0) {
+            let dmg = p.damage;
+            dmg = Math.max(1, dmg - player.armor);
+            player.hp -= dmg;
+            player.invuln = 0.8;
+            updateHpBar();
+            showDialog("Du blev träffad.", 1.2);
+            if (player.hp <= 0) {
+              endRun("death");
+            }
+          }
+          return false;
+        }
+
+        return true;
+      });
+
+      // Enemies
+      enemies.forEach(e => {
+        const dx = player.x - e.x;
+        const dy = player.y - e.y;
+        const angle = Math.atan2(dy, dx);
+        let speed = e.speed;
+
+        e.vx = Math.cos(angle) * speed;
+        e.vy = Math.sin(angle) * speed;
+
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+
+        // walls bounce
+        walls.forEach(w => {
+          if (circleRectCollision(e, w)) {
+            e.vx *= -0.7;
+            e.vy *= -0.7;
+            e.x += e.vx * dt * 2;
+            e.y += e.vy * dt * 2;
+          }
+        });
+
+        // bounds
+        if (e.x < e.r || e.x > WIDTH - e.r) e.vx *= -1;
+        if (e.y < e.r || e.y > HEIGHT - e.r) e.vy *= -1;
+        e.x = Math.max(e.r, Math.min(WIDTH - e.r, e.x));
+        e.y = Math.max(e.r, Math.min(HEIGHT - e.r, e.y));
+
+        // melee hit
+        const d = Math.hypot(e.x - player.x, e.y - player.y);
+        if (d < e.r + player.r) {
+          if (player.invuln <= 0) {
+            let dmg = 1;
+            if (e.type === "tung" || e.type === "elite") dmg = 2;
+            dmg = Math.max(1, dmg - player.armor);
+            player.hp -= dmg;
+            player.invuln = 0.8;
+            updateHpBar();
+            showDialog("Fienden träffade dig.", 1.2);
+            if (player.hp <= 0) {
+              endRun("death");
+            }
+          }
+        }
+
+        // ranged attack
+        if (e.ranged) {
+          e.shootTimer -= dt;
+          if (e.shootTimer <= 0) {
+            e.shootTimer = e.shootCooldown + Math.random() * 0.4;
+            const ang = Math.atan2(player.y - e.y, player.x - e.x);
+            const proj = createProjectile(
+              e.x,
+              e.y,
+              ang,
+              180,
+              e.type === "elite" ? 2 : 1,
+              false,
+              4
+            );
+            enemyProjectiles.push(proj);
+          }
+        }
+      });
+
+      // Pickups
+      pickups.forEach(p => {
+        p.pulse += dt * 4;
+      });
+
+      pickups = pickups.filter(p => {
+        const d = Math.hypot(p.x - player.x, p.y - player.y);
+        if (d < p.r + player.r + 4) {
+          if (p.kind === "gold") {
+            giveGold(randInt(1, 3));
+          } else if (p.kind === "heart") {
+            player.hp = Math.min(player.maxHp, player.hp + 1);
+            updateHpBar();
+          } else if (p.kind === "xp") {
+            gainXp(10);
+          }
+          return false;
+        }
+        return true;
+      });
+
+      // Exit portal activation
+      if (!enemies.length && !exitPortal.active) {
+        exitPortal.active = true;
+        showDialog("Portalen öppnas. Gå in för att välja kort.", 3);
+      }
+
+      if (exitPortal && exitPortal.active) {
+        const d = Math.hypot(exitPortal.x - player.x, exitPortal.y - player.y);
+        if (d < exitPortal.r + player.r) {
+          running = false;
+          const cards = getRandomCards();
+          showOverlay(
+            "Välj ett kort",
+            "Välj ett kort som formar din orbital‑build. Alla orbitals och deras nivåer syns i nederkanten.",
+            cards,
+            "Skippa"
+          );
+          overlayMainBtn.onclick = () => {
+            hideOverlay();
+            nextRoom();
+            running = true;
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+          };
+          nextRoom();
+          return;
+        }
+      }
+
+      // Soft win
+      if (runTime > 600 && day >= 3 && roomIndex >= 3) {
+        endRun("victory");
+      }
+    }
+
+    // --- Render ---
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      // Background
+      const bgGrad = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+      bgGrad.addColorStop(0, "#050608");
+      bgGrad.addColorStop(1, "#101018");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // Grid
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < WIDTH; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, HEIGHT);
+        ctx.stroke();
+      }
+      for (let y = 0; y < HEIGHT; y += 32) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(WIDTH, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Walls
+      ctx.save();
+      walls.forEach(w => {
+        const g = ctx.createLinearGradient(w.x, w.y, w.x + w.w, w.y + w.h);
+        g.addColorStop(0, "#212121");
+        g.addColorStop(1, "#424242");
+        ctx.fillStyle = g;
+        ctx.fillRect(w.x, w.y, w.w, w.h);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.strokeRect(w.x, w.y, w.w, w.h);
+      });
+      ctx.restore();
+
+      // Exit portal
+      if (exitPortal) {
+        exitPortal.pulse += 0.05;
+        const s = 1 + Math.sin(exitPortal.pulse) * 0.1;
+        ctx.save();
+        ctx.translate(exitPortal.x, exitPortal.y);
+        ctx.scale(s, s);
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, exitPortal.r * 1.8);
+        if (exitPortal.active) {
+          g.addColorStop(0, "rgba(144,202,249,0.9)");
+          g.addColorStop(1, "rgba(144,202,249,0)");
+        } else {
+          g.addColorStop(0, "rgba(96,125,139,0.7)");
+          g.addColorStop(1, "rgba(96,125,139,0)");
+        }
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, exitPortal.r * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = exitPortal.active ? "#90caf9" : "#78909c";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, exitPortal.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Pickups
+      pickups.forEach(p => {
+        const scale = 1 + Math.sin(p.pulse) * 0.15;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.scale(scale, scale);
+        if (p.kind === "gold") {
+          ctx.fillStyle = "#ffca28";
+          ctx.beginPath();
+          ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.kind === "heart") {
+          ctx.fillStyle = "#ef5350";
+          ctx.beginPath();
+          ctx.moveTo(0, -p.r / 2);
+          ctx.bezierCurveTo(p.r, -p.r, p.r * 1.4, 0, 0, p.r * 1.4);
+          ctx.bezierCurveTo(-p.r * 1.4, 0, -p.r, -p.r, 0, -p.r / 2);
+          ctx.fill();
+        } else if (p.kind === "xp") {
+          ctx.fillStyle = "#64b5f6";
+          ctx.beginPath();
+          ctx.moveTo(-p.r, p.r);
+          ctx.lineTo(0, -p.r);
+          ctx.lineTo(p.r, p.r);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      // Enemy projectiles
+      enemyProjectiles.forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.fillStyle = "#ffab91";
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Player projectiles
+      projectiles.forEach(p => {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (p.fireTrail) {
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, p.r * 3);
+          g.addColorStop(0, "rgba(255,183,77,0.7)");
+          g.addColorStop(1, "rgba(255,183,77,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, p.r * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#ffeb3b";
+        ctx.beginPath();
+        ctx.arc(0, 0, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Enemies
+      enemies.forEach(e => {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // HP bar
+        const hpPct = e.hp / e.maxHp;
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(-e.r, -e.r - 6, e.r * 2, 3);
+        ctx.fillStyle = "#ef5350";
+        ctx.fillRect(-e.r, -e.r - 6, e.r * 2 * hpPct, 3);
+
+        ctx.restore();
+      });
+
+      // Orbitals (ritas före spelaren så de syns runt)
+      orbitals.forEach(o => {
+        if (!o.x || !o.y) return;
+        ctx.save();
+        ctx.translate(o.x, o.y);
+        if (o.type === "shield") {
+          ctx.strokeStyle = "rgba(129,199,132,0.9)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (o.type === "sword") {
+          ctx.strokeStyle = "#ffeb3b";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(-8, 0);
+          ctx.lineTo(8, 0);
+          ctx.stroke();
+        } else if (o.type === "fireOrb") {
+          const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 10);
+          g.addColorStop(0, "rgba(255,138,101,1)");
+          g.addColorStop(1, "rgba(255,138,101,0)");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (o.type === "drone") {
+          ctx.fillStyle = "#90caf9";
+          ctx.beginPath();
+          ctx.arc(0, 0, 7, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#0d47a1";
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (o.type === "charm") {
+          ctx.fillStyle = "#cddc39";
+          ctx.beginPath();
+          ctx.arc(0, 0, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      });
+
+      // Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = "#4caf50";
+      ctx.beginPath();
+      ctx.arc(0, 0, player.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // face
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+      ctx.arc(3, -2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-4, 4);
+      ctx.quadraticCurveTo(0, 5, 4, 4);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // Aim arrow (pil som visar vart man siktar)
+      const dx = mouseX - player.x;
+      const dy = mouseY - player.y;
+      const angle = Math.atan2(dy, dx);
+      const arrowLen = 26;
+      const ax = player.x + Math.cos(angle) * (player.r + 4);
+      const ay = player.y + Math.sin(angle) * (player.r + 4);
+      const bx = player.x + Math.cos(angle) * (player.r + arrowLen);
+      const by = player.y + Math.sin(angle) * (player.r + arrowLen);
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+
+      // arrow head
+      const headSize = 5;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(
+        bx - Math.cos(angle - Math.PI / 6) * headSize,
+        by - Math.sin(angle - Math.PI / 6) * headSize
+      );
+      ctx.lineTo(
+        bx - Math.cos(angle + Math.PI / 6) * headSize,
+        by - Math.sin(angle + Math.PI / 6) * headSize
+      );
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.fill();
+      ctx.restore();
+
+      // Border
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, WIDTH - 2, HEIGHT - 2);
+    }
+
+    // --- Main loop ---
+    function loop(timestamp) {
+      if (!running) return;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      update(dt);
+      draw();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Initial static frame
+    player = createPlayer();
+    generateRoom();
+    updateHpBar();
+    updateXpBar();
+    updateMetaTexts();
+    draw();
+    showMessage("Tryck på 'Starta ny run' eller R för att börja.", 6);
+  </script>
+</body>
+</html>
