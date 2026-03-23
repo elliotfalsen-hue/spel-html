@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jag vill inte slåss – Pacifist Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top, #222 0, #050509 55%, #000 100%);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-size: 1.4rem;
+    }
+
+    h2 {
+      font-size: 0.9rem;
+      font-weight: 400;
+      opacity: 0.8;
+      margin-bottom: 10px;
+    }
+
+    #gameContainer {
+      position: relative;
+      margin-top: 10px;
+    }
+
+    canvas {
+      border-radius: 10px;
+      background: #111;
+      box-shadow: 0 0 20px rgba(0,0,0,0.8);
+      image-rendering: pixelated;
+    }
+
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.9rem;
+    }
+
+    .label {
+      opacity: 0.8;
+    }
+
+    #message {
+      min-height: 22px;
+      font-size: 0.9rem;
+      text-align: center;
+      max-width: 480px;
+    }
+
+    #controls {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      text-align: center;
+      max-width: 480px;
+      line-height: 1.4;
+    }
+
+    button {
+      margin-top: 4px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: none;
+      background: #2f7d32;
+      color: #fff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:hover {
+      background: #3fa343;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #dialogBox {
+      position: absolute;
+      left: 50%;
+      bottom: 10px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.8);
+      color: #f5f5f5;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-width: 260px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    #peaceMeterBar {
+      width: 120px;
+      height: 8px;
+      border-radius: 999px;
+      background: #333;
+      overflow: hidden;
+      border: 1px solid #555;
+    }
+
+    #peaceMeterFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #4caf50, #8bc34a);
+      transition: width 0.15s;
+    }
+
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      color: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 10;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+
+    #overlay.visible {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    #overlay h3 {
+      margin-bottom: 6px;
+    }
+
+    #overlay p {
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+      max-width: 320px;
+    }
+
+    #overlay button {
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Jag vill inte slåss</h1>
+  <h2>Ett litet pacifist-spel – vinn genom att inte skada någon</h2>
+
+  <div id="gameContainer">
+    <canvas id="game" width="480" height="320"></canvas>
+    <div id="dialogBox"></div>
+    <div id="overlay">
+      <h3 id="overlayTitle"></h3>
+      <p id="overlayText"></p>
+      <button id="restartBtn">Spela igen</button>
+    </div>
+  </div>
+
+  <div id="ui">
+    <div id="stats">
+      <div><span class="label">Tid:</span> <span id="time">0.0</span>s</div>
+      <div><span class="label">Hjärtan:</span> <span id="hearts">0</span>/10</div>
+      <div><span class="label">Nivå:</span> <span id="level">1</span></div>
+      <div>
+        <span class="label">Fred:</span>
+        <div id="peaceMeterBar">
+          <div id="peaceMeterFill"></div>
+        </div>
+      </div>
+    </div>
+    <div id="message"></div>
+    <div id="controls">
+      WASD eller piltangenter för att röra dig. <br />
+      Gå nära fiender för att lugna dem – men rör dem inte. <br />
+      Samla hjärtan, fyll fredsmätaren, överlev varje nivå utan att slåss.
+      <br />
+      Tryck <b>R</b> för att starta om när som helst.
+    </div>
+    <button id="startBtn">Starta spelet</button>
+  </div>
+
+  <script>
+    // --- Basic setup ---
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+
+    const timeEl = document.getElementById("time");
+    const heartsEl = document.getElementById("hearts");
+    const levelEl = document.getElementById("level");
+    const messageEl = document.getElementById("message");
+    const dialogBox = document.getElementById("dialogBox");
+    const peaceFill = document.getElementById("peaceMeterFill");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const restartBtn = document.getElementById("restartBtn");
+    const startBtn = document.getElementById("startBtn");
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    // --- Input ---
+    const keys = {};
+    window.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === "r" || e.key === "R") {
+        if (!running) startGame();
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    // --- Game state ---
+    let player;
+    let enemies = [];
+    let hearts = [];
+    let calmZones = [];
+    let running = false;
+    let lastTime = 0;
+    let elapsed = 0;
+    let collectedHearts = 0;
+    let level = 1;
+    let peace = 0; // 0–1
+    let dialogTimer = 0;
+    let levelTargetHearts = 10;
+    let levelTimeLimit = 60; // seconds
+    let gameEnded = false;
+
+    // --- Utility ---
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function dist(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function showMessage(text, duration = 2.5) {
+      messageEl.textContent = text;
+      if (duration > 0) {
+        setTimeout(() => {
+          if (messageEl.textContent === text) messageEl.textContent = "";
+        }, duration * 1000);
+      }
+    }
+
+    function showDialog(text, duration = 2.0) {
+      dialogBox.textContent = text;
+      dialogBox.style.opacity = 1;
+      dialogTimer = duration;
+    }
+
+    function updatePeaceMeter() {
+      const pct = Math.max(0, Math.min(1, peace)) * 100;
+      peaceFill.style.width = pct + "%";
+    }
+
+    function showOverlay(title, text) {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      overlay.classList.add("visible");
+    }
+
+    function hideOverlay() {
+      overlay.classList.remove("visible");
+    }
+
+    // --- Entities ---
+    function createPlayer() {
+      return {
+        x: WIDTH / 2,
+        y: HEIGHT / 2,
+        r: 10,
+        speed: 120,
+        color: "#4caf50",
+        vx: 0,
+        vy: 0,
+      };
+    }
+
+    function createEnemy(level) {
+      const edge = Math.floor(Math.random() * 4);
+      let x, y;
+      const margin = 20;
+      if (edge === 0) { // top
+        x = rand(margin, WIDTH - margin);
+        y = margin;
+      } else if (edge === 1) { // bottom
+        x = rand(margin, WIDTH - margin);
+        y = HEIGHT - margin;
+      } else if (edge === 2) { // left
+        x = margin;
+        y = rand(margin, HEIGHT - margin);
+      } else { // right
+        x = WIDTH - margin;
+        y = rand(margin, HEIGHT - margin);
+      }
+      return {
+        x,
+        y,
+        r: 9,
+        baseSpeed: rand(40, 60) + level * 5,
+        vx: 0,
+        vy: 0,
+        angry: true,
+        calm: false,
+        calmTimer: 0,
+        colorAngry: "#e53935",
+        colorCalm: "#ffeb3b",
+        colorPeace: "#90caf9",
+      };
+    }
+
+    function createHeart() {
+      return {
+        x: rand(30, WIDTH - 30),
+        y: rand(30, HEIGHT - 30),
+        r: 6,
+        pulse: Math.random() * Math.PI * 2,
+      };
+    }
+
+    function createCalmZone() {
+      return {
+        x: rand(60, WIDTH - 60),
+        y: rand(40, HEIGHT - 40),
+        r: rand(18, 26),
+        strength: rand(0.02, 0.04),
+      };
+    }
+
+    // --- Game control ---
+    function resetLevel(lvl) {
+      level = lvl;
+      levelEl.textContent = level;
+      elapsed = 0;
+      collectedHearts = 0;
+      heartsEl.textContent = collectedHearts + "/" + levelTargetHearts;
+      peace = 0;
+      updatePeaceMeter();
+      player = createPlayer();
+      enemies = [];
+      hearts = [];
+      calmZones = [];
+
+      const enemyCount = 4 + level * 2;
+      const heartCount = levelTargetHearts;
+      const calmCount = 2 + Math.floor(level / 2);
+
+      for (let i = 0; i < enemyCount; i++) enemies.push(createEnemy(level));
+      for (let i = 0; i < heartCount; i++) hearts.push(createHeart());
+      for (let i = 0; i < calmCount; i++) calmZones.push(createCalmZone());
+
+      showMessage(
+        level === 1
+          ? "Nivå 1: Visa att du kan vara modig utan våld."
+          : "Nivå " + level + ": Fler fiender, mer oro – men du vill fortfarande inte slåss.",
+        4
+      );
+    }
+
+    function startGame() {
+      hideOverlay();
+      gameEnded = false;
+      running = true;
+      lastTime = performance.now();
+      resetLevel(1);
+      requestAnimationFrame(loop);
+    }
+
+    restartBtn.addEventListener("click", startGame);
+    startBtn.addEventListener("click", startGame);
+
+    // --- Update logic ---
+    function update(dt) {
+      if (!running) return;
+
+      elapsed += dt;
+      timeEl.textContent = elapsed.toFixed(1);
+
+      // Dialog fade
+      if (dialogTimer > 0) {
+        dialogTimer -= dt;
+        if (dialogTimer <= 0) {
+          dialogBox.style.opacity = 0;
+        }
+      }
+
+      // Player movement
+      let ax = 0;
+      let ay = 0;
+      if (keys["w"] || keys["arrowup"]) ay -= 1;
+      if (keys["s"] || keys["arrowdown"]) ay += 1;
+      if (keys["a"] || keys["arrowleft"]) ax -= 1;
+      if (keys["d"] || keys["arrowright"]) ax += 1;
+
+      const len = Math.hypot(ax, ay) || 1;
+      ax /= len;
+      ay /= len;
+
+      const speed = player.speed;
+      player.vx = ax * speed;
+      player.vy = ay * speed;
+
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+
+      // Clamp to bounds
+      player.x = Math.max(player.r, Math.min(WIDTH - player.r, player.x));
+      player.y = Math.max(player.r, Math.min(HEIGHT - player.r, player.y));
+
+      // Calm zones effect
+      calmZones.forEach((cz) => {
+        const d = dist(player, cz);
+        if (d < cz.r + 10) {
+          peace += cz.strength * dt;
+          if (Math.random() < 0.02) {
+            showDialog("Du andas djupt. Du vill inte slåss.");
+          }
+        }
+      });
+
+      // Enemies
+      enemies.forEach((e) => {
+        const dToPlayer = dist(e, player);
+        const dirX = player.x - e.x;
+        const dirY = player.y - e.y;
+        const len = Math.hypot(dirX, dirY) || 1;
+        const nx = dirX / len;
+        const ny = dirY / len;
+
+        // If calm, they drift away from player
+        if (e.calm) {
+          const speed = e.baseSpeed * 0.4;
+          e.vx = -nx * speed;
+          e.vy = -ny * speed;
+          e.calmTimer -= dt;
+          if (e.calmTimer <= 0) {
+            e.calm = false;
+            e.angry = false; // becomes peaceful
+          }
+        } else {
+          // Angry ones chase, peaceful ones wander slowly
+          if (e.angry) {
+            const speed = e.baseSpeed;
+            e.vx = nx * speed;
+            e.vy = ny * speed;
+          } else {
+            // Peaceful: small wandering
+            const speed = e.baseSpeed * 0.2;
+            e.vx += rand(-1, 1) * 10 * dt;
+            e.vy += rand(-1, 1) * 10 * dt;
+            const vlen = Math.hypot(e.vx, e.vy) || 1;
+            e.vx = (e.vx / vlen) * speed;
+            e.vy = (e.vy / vlen) * speed;
+          }
+        }
+
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+
+        // Bounce off walls
+        if (e.x < e.r || e.x > WIDTH - e.r) e.vx *= -1;
+        if (e.y < e.r || e.y > HEIGHT - e.r) e.vy *= -1;
+        e.x = Math.max(e.r, Math.min(WIDTH - e.r, e.x));
+        e.y = Math.max(e.r, Math.min(HEIGHT - e.r, e.y));
+
+        // Calm enemies if player is close but not touching
+        if (dToPlayer < 60 && dToPlayer > player.r + e.r + 4 && e.angry) {
+          // "Talk" to them
+          if (Math.random() < 0.02) {
+            e.calm = true;
+            e.calmTimer = rand(3, 6);
+            e.angry = false;
+            peace += 0.05;
+            showDialog("Jag vill inte slåss. Kan vi bara prata?");
+          }
+        }
+
+        // If player touches enemy -> game over (you got into conflict)
+        if (dToPlayer < player.r + e.r) {
+          running = false;
+          gameEnded = true;
+          showOverlay(
+            "Du hamnade i konflikt",
+            "Du ville inte slåss, men du kom för nära. Försök igen och håll avstånd – men var modig nog att lugna dem."
+          );
+        }
+      });
+
+      // Hearts
+      hearts.forEach((h) => {
+        h.pulse += dt * 4;
+      });
+
+      // Collect hearts
+      hearts = hearts.filter((h) => {
+        const d = dist(player, h);
+        if (d < player.r + h.r + 4) {
+          collectedHearts++;
+          heartsEl.textContent = collectedHearts + "/" + levelTargetHearts;
+          peace += 0.03;
+          if (Math.random() < 0.5) {
+            showDialog("Du väljer omtanke framför våld.");
+          }
+          return false;
+        }
+        return true;
+      });
+
+      // Cap peace
+      if (peace > 1) peace = 1;
+      if (peace < 0) peace = 0;
+      updatePeaceMeter();
+
+      // Win conditions for level
+      const allEnemiesPeaceful = enemies.every((e) => !e.angry);
+      const enoughHearts = collectedHearts >= levelTargetHearts * 0.7;
+      const highPeace = peace >= 0.8;
+
+      if ((allEnemiesPeaceful && enoughHearts) || (highPeace && enoughHearts)) {
+        running = false;
+        if (level >= 3) {
+          // Game complete
+          gameEnded = true;
+          showOverlay(
+            "Du vann utan att slåss",
+            "Du tog dig igenom alla nivåer genom att hålla avstånd, lugna fiender och samla hjärtan. Du visade att mod inte kräver våld."
+          );
+        } else {
+          // Next level
+          const nextLevel = level + 1;
+          showOverlay(
+            "Nivå klar",
+            "Du höll fast vid 'jag vill inte slåss'. Är du redo för nästa nivå?"
+          );
+          // Auto-advance after short delay
+          setTimeout(() => {
+            if (!gameEnded) {
+              hideOverlay();
+              running = true;
+              resetLevel(nextLevel);
+              lastTime = performance.now();
+              requestAnimationFrame(loop);
+            }
+          }, 2000);
+        }
+      }
+
+      // Time limit fail
+      if (elapsed > levelTimeLimit && !gameEnded) {
+        running = false;
+        gameEnded = true;
+        showOverlay(
+          "Tiden tog slut",
+          "Ibland räcker inte tiden till, även om du inte vill slåss. Försök igen – fokusera på hjärtan och fred."
+        );
+      }
+    }
+
+    // --- Render ---
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      // Background grid
+      ctx.save();
+      ctx.strokeStyle = "#1b1b1b";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < WIDTH; x += 24) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, HEIGHT);
+        ctx.stroke();
+      }
+      for (let y = 0; y < HEIGHT; y += 24) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(WIDTH, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Calm zones
+      calmZones.forEach((cz) => {
+        const gradient = ctx.createRadialGradient(
+          cz.x,
+          cz.y,
+          0,
+          cz.x,
+          cz.y,
+          cz.r * 1.4
+        );
+        gradient.addColorStop(0, "rgba(76,175,80,0.35)");
+        gradient.addColorStop(1, "rgba(76,175,80,0)");
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cz.x, cz.y, cz.r * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(129,199,132,0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cz.x, cz.y, cz.r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      // Hearts
+      hearts.forEach((h) => {
+        const scale = 1 + Math.sin(h.pulse) * 0.15;
+        const size = h.r * scale;
+        ctx.save();
+        ctx.translate(h.x, h.y);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = "#ff5252";
+        ctx.beginPath();
+        ctx.moveTo(0, size / 2);
+        ctx.bezierCurveTo(
+          size,
+          -size / 2,
+          size * 1.5,
+          size / 2,
+          0,
+          size * 1.4
+        );
+        ctx.bezierCurveTo(
+          -size * 1.5,
+          size / 2,
+          -size,
+          -size / 2,
+          0,
+          size / 2
+        );
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Enemies
+      enemies.forEach((e) => {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        let color = e.colorAngry;
+        if (e.calm) color = e.colorCalm;
+        else if (!e.angry) color = e.colorPeace;
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+        ctx.arc(3, -2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mouth
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (e.angry) {
+          ctx.moveTo(-4, 4);
+          ctx.lineTo(4, 2);
+        } else if (e.calm) {
+          ctx.moveTo(-4, 4);
+          ctx.quadraticCurveTo(0, 6, 4, 4);
+        } else {
+          ctx.moveTo(-4, 4);
+          ctx.quadraticCurveTo(0, 2, 4, 4);
+        }
+        ctx.stroke();
+
+        ctx.restore();
+      });
+
+      // Player
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      ctx.fillStyle = player.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, player.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Player face
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+      ctx.arc(3, -2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-4, 4);
+      ctx.quadraticCurveTo(0, 5, 4, 4);
+      ctx.stroke();
+
+      ctx.restore();
+
+      // Border
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, WIDTH - 2, HEIGHT - 2);
+    }
+
+    // --- Main loop ---
+    function loop(timestamp) {
+      if (!running) return;
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+      lastTime = timestamp;
+
+      update(dt);
+      draw();
+
+      requestAnimationFrame(loop);
+    }
+
+    // Initial static frame
+    player = createPlayer();
+    draw();
+    showMessage("Tryck på 'Starta spelet' eller R för att börja.", 5);
+  </script>
+</body>
+</html>
