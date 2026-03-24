@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<title>Roguelite Prototype – 20MTD‑style</title>
+<style>
+    body {
+        margin: 0;
+        background: #111;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        color: white;
+    }
+    #upgradeMenu {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(20,20,20,0.95);
+        padding: 20px;
+        border: 2px solid white;
+        display: none;
+        width: 400px;
+    }
+    .upgradeOption {
+        padding: 10px;
+        margin: 10px 0;
+        background: #333;
+        cursor: pointer;
+        border: 1px solid #666;
+    }
+    .upgradeOption:hover {
+        background: #555;
+    }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="upgradeMenu"></div>
+
+<script>
+// =========================
+// CANVAS SETUP
+// =========================
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+addEventListener("resize", () => {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+});
+
+// =========================
+// INPUT
+// =========================
+let keys = {};
+let mouse = { x: 0, y: 0 };
+
+addEventListener("keydown", e => keys[e.key] = true);
+addEventListener("keyup", e => keys[e.key] = false);
+addEventListener("mousemove", e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+
+// =========================
+// PLAYER
+// =========================
+class Player {
+    constructor() {
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.speed = 4;
+        this.size = 20;
+        this.hp = 100;
+        this.fireRate = 300; // ms
+        this.lastShot = 0;
+        this.damage = 10;
+        this.bulletSpeed = 8;
+    }
+
+    update(dt) {
+        if (keys["w"]) this.y -= this.speed;
+        if (keys["s"]) this.y += this.speed;
+        if (keys["a"]) this.x -= this.speed;
+        if (keys["d"]) this.x += this.speed;
+
+        // Auto-fire
+        if (Date.now() - this.lastShot > this.fireRate) {
+            this.shoot();
+            this.lastShot = Date.now();
+        }
+    }
+
+    shoot() {
+        const angle = Math.atan2(mouse.y - this.y, mouse.x - this.x);
+        bullets.push(new Bullet(this.x, this.y, angle, this.damage, this.bulletSpeed));
+    }
+
+    draw() {
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+const player = new Player();
+
+// =========================
+// BULLETS
+// =========================
+class Bullet {
+    constructor(x, y, angle, damage, speed) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.damage = damage;
+        this.speed = speed;
+        this.size = 5;
+    }
+
+    update() {
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+    }
+
+    draw() {
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+let bullets = [];
+
+// =========================
+// ENEMIES
+// =========================
+class Enemy {
+    constructor() {
+        this.x = Math.random() < 0.5 ? 0 : canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.speed = 1.5;
+        this.size = 20;
+        this.hp = 30;
+    }
+
+    update() {
+        const angle = Math.atan2(player.y - this.y, player.x - this.x);
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+    }
+
+    draw() {
+        ctx.fillStyle = "red";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+let enemies = [];
+let enemySpawnTimer = 0;
+
+// =========================
+// XP + LEVEL SYSTEM
+// =========================
+let xp = 0;
+let level = 1;
+let xpToNext = 50;
+
+function gainXP(amount) {
+    xp += amount;
+    if (xp >= xpToNext) {
+        xp -= xpToNext;
+        level++;
+        xpToNext = Math.floor(xpToNext * 1.3);
+        openUpgradeMenu();
+    }
+}
+
+// =========================
+// UPGRADE SYSTEM
+// =========================
+const upgrades = [
+    {
+        name: "Snabbare skott",
+        apply: () => player.fireRate *= 0.8
+    },
+    {
+        name: "Mer skada",
+        apply: () => player.damage += 5
+    },
+    {
+        name: "Större kulor",
+        apply: () => player.size += 2
+    },
+    {
+        name: "Snabbare rörelse",
+        apply: () => player.speed += 0.5
+    },
+    {
+        name: "Fler skott",
+        apply: () => {
+            const oldShoot = player.shoot.bind(player);
+            player.shoot = () => {
+                oldShoot();
+                oldShoot();
+            };
+        }
+    }
+];
+
+function openUpgradeMenu() {
+    const menu = document.getElementById("upgradeMenu");
+    menu.innerHTML = "<h2>Välj en uppgradering</h2>";
+
+    const choices = [];
+    while (choices.length < 3) {
+        const pick = upgrades[Math.floor(Math.random() * upgrades.length)];
+        if (!choices.includes(pick)) choices.push(pick);
+    }
+
+    choices.forEach(upg => {
+        const div = document.createElement("div");
+        div.className = "upgradeOption";
+        div.textContent = upg.name;
+        div.onclick = () => {
+            upg.apply();
+            menu.style.display = "none";
+        };
+        menu.appendChild(div);
+    });
+
+    menu.style.display = "block";
+}
+
+// =========================
+// GAME LOOP
+// =========================
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Spawn enemies
+    enemySpawnTimer += dt;
+    if (enemySpawnTimer > 1000) {
+        enemies.push(new Enemy());
+        enemySpawnTimer = 0;
+    }
+
+    // Update player
+    player.update(dt);
+    player.draw();
+
+    // Update bullets
+    bullets.forEach((b, i) => {
+        b.update();
+        b.draw();
+
+        // Remove off-screen bullets
+        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+            bullets.splice(i, 1);
+        }
+    });
+
+    // Update enemies
+    enemies.forEach((e, i) => {
+        e.update();
+        e.draw();
+
+        // Collision with bullets
+        bullets.forEach((b, j) => {
+            const dx = e.x - b.x;
+            const dy = e.y - b.y;
+            if (Math.hypot(dx, dy) < e.size + b.size) {
+                e.hp -= b.damage;
+                bullets.splice(j, 1);
+                if (e.hp <= 0) {
+                    enemies.splice(i, 1);
+                    gainXP(10);
+                }
+            }
+        });
+    });
+
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
