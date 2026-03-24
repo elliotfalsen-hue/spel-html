@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Projection Sorcery Parody – Full Engine</title>
+<style>
+    body {
+        margin: 0;
+        background: #05050a;
+        color: #fff;
+        font-family: sans-serif;
+        text-align: center;
+        user-select: none;
+    }
+    #ui {
+        margin-top: 8px;
+        font-size: 14px;
+    }
+    canvas {
+        display: block;
+        margin: 10px auto;
+        background: radial-gradient(circle at top, #222 0, #000 60%);
+        border: 2px solid #555;
+    }
+    .barContainer {
+        width: 260px;
+        height: 14px;
+        border: 1px solid #fff;
+        background: #300;
+        position: relative;
+        margin: 4px;
+    }
+    .barFill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+    }
+    #pHpFill { background: #0f0; }
+    #eHpFill { background: #f00; }
+    #pSpFill { background: #00bfff; }
+    #comboText {
+        font-size: 18px;
+        margin-top: 4px;
+        min-height: 22px;
+    }
+</style>
+</head>
+<body>
+
+<h1>Projection Sorcery Parody – Full 24 FPS Engine</h1>
+
+<div id="ui">
+    <div style="display:flex;justify-content:center;gap:40px;">
+        <div>
+            Player HP
+            <div class="barContainer"><div id="pHpFill" class="barFill"></div></div>
+            Special
+            <div class="barContainer"><div id="pSpFill" class="barFill"></div></div>
+        </div>
+        <div>
+            Enemy HP
+            <div class="barContainer"><div id="eHpFill" class="barFill"></div></div>
+        </div>
+    </div>
+
+    <div id="comboText"></div>
+
+    <div>
+        Controls:<br>
+        A/D = move, W = jump<br>
+        J = light chain, K = heavy launcher, L = dash slash<br>
+        O = palm / divekick, P = frame trap, I = parry, U = super barrage<br>
+        ; = aerial slash, ' = anti-air upper, [ = ground stomp
+    </div>
+</div>
+
+<canvas id="game" width="1280" height="640"></canvas>
+
+<script>
+// =========================================================
+// CORE CONSTANTS & GLOBALS
+// =========================================================
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+// Fixed 24 FPS
+const FPS = 24;
+const STEP = 1000 / FPS;
+
+// World physics
+const GROUND_Y = canvas.height - 80;
+const GRAVITY = 1.05;
+
+// Screen shake
+let shakeTime = 0;
+let shakeIntensity = 0;
+
+// Slow motion
+let slowMoTime = 0;
+let slowMoFactor = 1;
+
+// UI elements
+const pHpFill = document.getElementById("pHpFill");
+const eHpFill = document.getElementById("eHpFill");
+const pSpFill = document.getElementById("pSpFill");
+const comboText = document.getElementById("comboText");
+
+// Input map
+const keys = {
+    a: false,
+    d: false,
+    w: false,
+    j: false,
+    k: false,
+    l: false,
+    i: false,
+    u: false,
+    o: false,
+    p: false,
+    ";": false,
+    "'": false,
+    "[": false
+};
+
+// Key listeners
+document.addEventListener("keydown", e => {
+    const k = e.key;
+    if (keys.hasOwnProperty(k)) keys[k] = true;
+});
+
+document.addEventListener("keyup", e => {
+    const k = e.key;
+    if (keys.hasOwnProperty(k)) keys[k] = false;
+});
+
+// =========================================================
+// UTILITY FUNCTIONS
+// =========================================================
+
+function clamp(v, min, max) {
+    return v < min ? min : v > max ? max : v;
+}
+
+function rectOverlap(a, b) {
+    return !(
+        a.x + a.w < b.x ||
+        a.x > b.x + b.w ||
+        a.y + a.h < b.y ||
+        a.y > b.y + b.h
+    );
+}
+
+function randRange(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+// =========================================================
+// HIT SPARK SYSTEM
+// =========================================================
+
+const sparks = [];
+
+function spawnSpark(x, y, color) {
+    for (let i = 0; i < 6; i++) {
+        sparks.push({
+            x: x,
+            y: y,
+            vx: randRange(-3, 3),
+            vy: randRange(-3, -1),
+            life: 12,
+            color: color
+        });
+    }
+}
+
+function updateSparks() {
+    for (const s of sparks) {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vy += 0.25;
+        s.life--;
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+        if (sparks[i].life <= 0) sparks.splice(i, 1);
+    }
+}
+
+function drawSparks() {
+    for (const s of sparks) {
+        const alpha = s.life / 12;
+        ctx.fillStyle = `rgba(${s.color.r},${s.color.g},${s.color.b},${alpha})`;
+        ctx.fillRect(s.x, s.y, 3, 3);
+    }
+}
+
+// =========================================================
+// AFTERIMAGE SYSTEM
+// =========================================================
+
+class Afterimage {
+    constructor(x, y, w, h, color) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h;
+        this.color = color;
+        this.alpha = 0.5;
+    }
+    update() {
+        this.alpha -= 0.05;
+    }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        ctx.restore();
+    }
+}
+
+const afterimages = [];
+
+function addAfterimage(x, y, w, h, color) {
+    afterimages.push(new Afterimage(x, y, w, h, color));
+}
+
+function updateAfterimages() {
+    for (const a of afterimages) a.update();
+    for (let i = afterimages.length - 1; i >= 0; i--) {
+        if (afterimages[i].alpha <= 0) afterimages.splice(i, 1);
+    }
+}
+
+function drawAfterimages() {
+    for (const a of afterimages) a.draw();
+}
+
+// =========================================================
+// FIGHTER BASE CLASS (start)
+// =========================================================
+
+class Fighter {
+    constructor(x, y, colorBody, colorAura) {
+        this.x = x;
+        this.y = y;
+        this.w = 50;
+        this.h = 110;
+
+        this.vx = 0;
+        this.vy = 0;
+
+        this.facing = 1;
+
+        this.colorBody = colorBody;
+        this.colorAura = colorAura;
+
+        this.hp = 100;
+        this.maxHp = 100;
+
+        this.sp = 0;
+        this.maxSp = 100;
+
+        this.state = "idle";
+        this.stateTimer = 0;
+
+        this.onGround = false;
+
+        this.comboCount = 0;
+        this.comboTimer = 0;
+
+        this.parryWindow = 0;
+        this.parrySuccessTimer = 0;
+
+        this.stunTimer = 0;
+
+        this.attackHitbox = null;
+        this.attackDamage = 0;
+        this.attackType = "";
+    }
+
+    get hitbox() {
+        return {
+            x: this.x,
+            y: this.y,
+            w: this.w,
+            h: this.h
+        };
+    }
+
+    centerX() { return this.x + this.w / 2; }
+    centerY() { return this.y + this.h / 2; }
+
+    applyGravity() {
+        this.vy += GRAVITY;
+    }
+
+    applyMovement() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.y + this.h > GROUND_Y) {
+            this.y = GROUND_Y - this.h;
+            this.vy = 0;
+            this.onGround = true;
+        } else {
+            this.onGround = false;
+        }
+
+        if (this.x < 0) this.x = 0;
+        if (this.x + this.w > canvas.width) this.x = canvas.width - this.w;
+    }
+
+    takeDamage(amount, type, kbX, kbY) {
+        if (this.hp <= 0) return;
+
+        this.hp -= amount;
+        if (this.hp < 1) this.hp = 1;
+
+        this.vx = kbX;
+        this.vy = kbY;
+
+        this.state = "hitstun";
+        this.stateTimer = 18;
+
+        this.stunTimer = 18;
+
+        shakeTime = 10;
+        shakeIntensity = 6;
+
+        if (type === "counter") {
+            slowMoTime = 20;
+            slowMoFactor = 0.4;
+        }
+    }
+
+    gainSp(amount) {
+        this.sp += amount;
+        if (this.sp > this.maxSp) this.sp = this.maxSp;
+    }
+
+    spendSp(amount) {
+        if (this.sp >= amount) {
+            this.sp -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    addProjectionAfterimage() {
+        addAfterimage(this.x, this.y, this.w, this.h, "rgba(120,200,255,1)");
+    }
+
+    updateCombo() {
+        if (this.comboTimer > 0) {
+            this.comboTimer--;
+            if (this.comboTimer <= 0) this.comboCount = 0;
+        }
+    }
+
+    registerHit(dmg) {
+        this.comboCount++;
+        this.comboTimer = 40;
+        this.gainSp(dmg * 0.8);
+    }
+
+    updateParry() {
+        if (this.parryWindow > 0) this.parryWindow--;
+        if (this.parrySuccessTimer > 0) this.parrySuccessTimer--;
+    }
+
+    drawBase() {
+        ctx.fillStyle = this.colorBody;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+
+        ctx.fillStyle = "#f5e0c8";
+        ctx.fillRect(this.x + 10, this.y - 20, 30, 20);
+
+        ctx.strokeStyle = this.colorAura;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - 4, this.y - 24, this.w + 8, this.h + 28);
+
+        if (this.parrySuccessTimer > 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.7;
+            ctx.strokeStyle = "#00ffff";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(this.centerX(), this.centerY(), 50, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    drawAttackBox() {
+        if (this.attackHitbox) {
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = "rgba(255,100,150,0.7)";
+            ctx.fillRect(
+                this.attackHitbox.x,
+                this.attackHitbox.y,
+                this.attackHitbox.w,
+                this.attackHitbox.h
+            );
+            ctx.restore();
+        }
+    }
+}
+// =========================================================
+// PLAYER CLASS (fortsättning)
+// =========================================================
+
+class Player extends Fighter {
+    constructor(x, y) {
+        super(x, y, "#4da6ff", "rgba(0,255,255,0.7)");
+        this.lightChainStep = 0;
+    }
+
+    handleInput() {
+        if (this.state === "hitstun" || this.state === "super") return;
+
+        // Parry
+        if (keys["i"] && this.parryWindow <= 0 && this.state !== "parry") {
+            this.state = "parry";
+            this.stateTimer = 10;
+            this.parryWindow = 10;
+            return;
+        }
+
+        // Super barrage
+        if (keys["u"] && this.sp >= 80 && this.state !== "super") {
+            this.state = "super";
+            this.stateTimer = 60;
+            this.spendSp(80);
+            shakeTime = 30;
+            shakeIntensity = 10;
+            return;
+        }
+
+        // If in attack animation, don't start new one
+        if (this.state === "attack") return;
+
+        let moving = false;
+        this.vx = 0;
+
+        // Movement
+        if (keys["a"]) {
+            this.vx = -6;
+            this.facing = -1;
+            moving = true;
+        }
+        if (keys["d"]) {
+            this.vx = 6;
+            this.facing = 1;
+            moving = true;
+        }
+
+        // Jump
+        if (keys["w"] && this.onGround) {
+            this.vy = -20;
+            this.onGround = false;
+            this.state = "jump";
+            this.stateTimer = 12;
+        }
+
+        // Dash slash (Projection dash)
+        if (keys["l"]) {
+            const dashDistance = 32;
+            this.x += this.facing * dashDistance;
+            this.addProjectionAfterimage();
+            this.addProjectionAfterimage();
+            this.addProjectionAfterimage();
+            this.state = "attack";
+            this.stateTimer = 12;
+            this.attackType = "dashSlash";
+            const atkW = 50;
+            const atkH = 40;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y + 20;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 10;
+            return;
+        }
+
+        // Light chain (J)
+        if (keys["j"]) {
+            this.state = "attack";
+            this.stateTimer = 10;
+            this.attackType = "lightChain";
+            this.lightChainStep = (this.lightChainStep + 1) % 3;
+            const atkW = 45;
+            const atkH = 35;
+            const offsetY = this.lightChainStep === 1 ? 10 : this.lightChainStep === 2 ? -5 : 0;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y + 20 + offsetY;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 5 + this.lightChainStep * 2;
+            return;
+        }
+
+        // Heavy launcher (K)
+        if (keys["k"]) {
+            this.state = "attack";
+            this.stateTimer = 18;
+            this.attackType = "launcher";
+            const atkW = 60;
+            const atkH = 50;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y + 10;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 12;
+            return;
+        }
+
+        // Palm strike (O)
+        if (keys["o"] && this.onGround) {
+            this.state = "attack";
+            this.stateTimer = 14;
+            this.attackType = "palm";
+            const atkW = 55;
+            const atkH = 40;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y + 15;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 8;
+            return;
+        }
+
+        // Frame trap (P)
+        if (keys["p"]) {
+            this.state = "attack";
+            this.stateTimer = 22;
+            this.attackType = "frameTrap";
+            const atkW = 70;
+            const atkH = 50;
+            const atkX =
+                this.facing === 1 ? this.x + this.w + 10 : this.x - atkW - 10;
+            const atkY = this.y + 5;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 10;
+            return;
+        }
+
+        // Divekick (air + O)
+        if (!this.onGround && keys["o"]) {
+            this.state = "attack";
+            this.stateTimer = 16;
+            this.attackType = "divekick";
+            this.vy = 14;
+            const atkW = 40;
+            const atkH = 40;
+            const atkX = this.x;
+            const atkY = this.y + this.h;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 9;
+            return;
+        }
+
+        // Aerial slash (; key)
+        if (!this.onGround && keys[";"]) {
+            this.state = "attack";
+            this.stateTimer = 14;
+            this.attackType = "aerialSlash";
+            const atkW = 70;
+            const atkH = 35;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y + 10;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 7;
+            return;
+        }
+
+        // Anti-air upper ( ' key )
+        if (this.onGround && keys["'"]) {
+            this.state = "attack";
+            this.stateTimer = 18;
+            this.attackType = "antiAir";
+            const atkW = 50;
+            const atkH = 70;
+            const atkX =
+                this.facing === 1 ? this.x + this.w : this.x - atkW;
+            const atkY = this.y - 10;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 11;
+            return;
+        }
+
+        // Ground stomp ([ key)
+        if (this.onGround && keys["["]) {
+            this.state = "attack";
+            this.stateTimer = 20;
+            this.attackType = "stomp";
+            const atkW = 80;
+            const atkH = 40;
+            const atkX = this.x - 20;
+            const atkY = this.y + this.h - 10;
+            this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            this.attackDamage = 9;
+            return;
+        }
+
+        // Movement state
+        if (moving && this.onGround) {
+            this.state = "run";
+        } else if (this.onGround) {
+            this.state = "idle";
+        }
+    }
+
+    updateState() {
+        if (this.stateTimer > 0) this.stateTimer--;
+
+        if (this.state === "attack" && this.stateTimer <= 0) {
+            this.attackHitbox = null;
+            this.state = this.onGround ? "idle" : "jump";
+        }
+
+        if (this.state === "hitstun" && this.stateTimer <= 0) {
+            this.state = this.onGround ? "idle" : "jump";
+        }
+
+        if (this.state === "parry" && this.stateTimer <= 0) {
+            this.state = this.onGround ? "idle" : "jump";
+        }
+
+        if (this.state === "super" && this.stateTimer <= 0) {
+            this.state = this.onGround ? "idle" : "jump";
+        }
+    }
+
+    onSuccessfulParry() {
+        this.parrySuccessTimer = 20;
+        this.gainSp(20);
+        shakeTime = 15;
+        shakeIntensity = 8;
+        slowMoTime = 20;
+        slowMoFactor = 0.4;
+    }
+
+    draw() {
+        this.drawBase();
+        this.drawAttackBox();
+    }
+}
+// =========================================================
+// ENEMY CLASS (fortsättning)
+// =========================================================
+
+class Enemy extends Fighter {
+    constructor(x, y) {
+        super(x, y, "#ff4d4d", "rgba(255,80,80,0.7)");
+        this.aiTimer = 0;
+        this.aiState = "approach";
+    }
+
+    updateAI(player) {
+        if (this.state === "hitstun" || this.state === "super") return;
+
+        this.aiTimer--;
+        if (this.aiTimer <= 0) {
+            this.aiTimer = 20 + Math.floor(Math.random() * 20);
+            const r = Math.random();
+
+            if (r < 0.35) this.aiState = "approach";
+            else if (r < 0.55) this.aiState = "poke";
+            else if (r < 0.70) this.aiState = "heavy";
+            else if (r < 0.85) this.aiState = "dash";
+            else this.aiState = "uppercut";
+        }
+
+        const dx = player.centerX() - this.centerX();
+        this.facing = dx >= 0 ? 1 : -1;
+
+        if (this.aiState === "approach") {
+            if (Math.abs(dx) > 140) this.vx = Math.sign(dx) * 3.5;
+            else this.vx = 0;
+        }
+
+        else if (this.aiState === "poke") {
+            if (Math.abs(dx) < 160) {
+                this.state = "attack";
+                this.stateTimer = 14;
+                this.attackType = "light";
+                const atkW = 45;
+                const atkH = 35;
+                const atkX = this.facing === 1 ? this.x + this.w : this.x - atkW;
+                const atkY = this.y + 20;
+                this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+                this.attackDamage = 5;
+            }
+        }
+
+        else if (this.aiState === "heavy") {
+            if (Math.abs(dx) < 180) {
+                this.state = "attack";
+                this.stateTimer = 22;
+                this.attackType = "heavy";
+                const atkW = 70;
+                const atkH = 50;
+                const atkX = this.facing === 1 ? this.x + this.w : this.x - atkW;
+                const atkY = this.y + 10;
+                this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+                this.attackDamage = 12;
+            }
+        }
+
+        else if (this.aiState === "dash") {
+            if (Math.abs(dx) < 260) {
+                const dashDistance = 26;
+                this.x += this.facing * dashDistance;
+                this.state = "attack";
+                this.stateTimer = 14;
+                this.attackType = "dash";
+                const atkW = 50;
+                const atkH = 40;
+                const atkX = this.facing === 1 ? this.x + this.w : this.x - atkW;
+                const atkY = this.y + 20;
+                this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+                this.attackDamage = 9;
+            }
+        }
+
+        else if (this.aiState === "uppercut") {
+            if (Math.abs(dx) < 150) {
+                this.state = "attack";
+                this.stateTimer = 20;
+                this.attackType = "uppercut";
+                const atkW = 50;
+                const atkH = 70;
+                const atkX = this.facing === 1 ? this.x + this.w : this.x - atkW;
+                const atkY = this.y - 10;
+                this.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+                this.attackDamage = 11;
+            }
+        }
+    }
+
+    updateState() {
+        if (this.stateTimer > 0) this.stateTimer--;
+
+        if (this.state === "attack" && this.stateTimer <= 0) {
+            this.attackHitbox = null;
+            this.state = this.onGround ? "idle" : "jump";
+        }
+
+        if (this.state === "hitstun" && this.stateTimer <= 0) {
+            this.state = this.onGround ? "idle" : "jump";
+        }
+    }
+
+    draw() {
+        this.drawBase();
+        this.drawAttackBox();
+    }
+}
+
+// =========================================================
+// INSTANTIATE FIGHTERS
+// =========================================================
+
+const player = new Player(200, 200);
+const enemy = new Enemy(900, 200);
+
+// =========================================================
+// COMBAT SYSTEM
+// =========================================================
+
+function handleCombat() {
+
+    // -----------------------------
+    // PLAYER HITS ENEMY
+    // -----------------------------
+    if (player.attackHitbox) {
+        if (rectOverlap(player.attackHitbox, enemy.hitbox)) {
+
+            const isCounter = enemy.state === "attack";
+            const type = isCounter ? "counter" : "normal";
+            const dmg = player.attackDamage + (isCounter ? 4 : 0);
+
+            let kbX = player.facing * 7;
+            let kbY = -6;
+
+            if (player.attackType === "launcher") kbY = -14;
+            if (player.attackType === "divekick") kbY = -4;
+            if (player.attackType === "stomp") kbY = -2;
+
+            enemy.takeDamage(dmg, type, kbX, kbY);
+            player.registerHit(dmg);
+
+            spawnSpark(enemy.centerX(), enemy.centerY(), { r: 255, g: 200, b: 200 });
+
+            player.attackHitbox = null;
+        }
+    }
+
+    // -----------------------------
+    // ENEMY HITS PLAYER
+    // -----------------------------
+    if (enemy.attackHitbox) {
+        if (rectOverlap(enemy.attackHitbox, player.hitbox)) {
+
+            if (player.parryWindow > 0) {
+                enemy.takeDamage(10, "counter", -enemy.facing * 10, -10);
+                player.onSuccessfulParry();
+                spawnSpark(player.centerX(), player.centerY(), { r: 150, g: 255, b: 255 });
+                enemy.attackHitbox = null;
+            }
+
+            else {
+                const isCounter = player.state === "attack";
+                const type = isCounter ? "counter" : "normal";
+                const dmg = enemy.attackDamage + (isCounter ? 3 : 0);
+
+                let kbX = enemy.facing * 7;
+                let kbY = -6;
+                if (enemy.attackType === "uppercut") kbY = -14;
+
+                player.takeDamage(dmg, type, kbX, kbY);
+                enemy.registerHit(dmg);
+
+                spawnSpark(player.centerX(), player.centerY(), { r: 255, g: 150, b: 150 });
+
+                enemy.attackHitbox = null;
+            }
+        }
+    }
+
+    // -----------------------------
+    // SUPER BARRAGE
+    // -----------------------------
+    if (player.state === "super" && player.stateTimer % 6 === 0) {
+        const atkW = 90;
+        const atkH = 70;
+        const atkX = player.facing === 1 ? player.x + player.w : player.x - atkW;
+        const atkY = player.y + 10;
+
+        const box = { x: atkX, y: atkY, w: atkW, h: atkH };
+
+        if (rectOverlap(box, enemy.hitbox)) {
+            enemy.takeDamage(3, "normal", player.facing * 5, -5);
+            player.registerHit(3);
+            spawnSpark(enemy.centerX(), enemy.centerY(), { r: 255, g: 255, b: 200 });
+        }
+    }
+}
+
+// =========================================================
+// UI UPDATE
+// =========================================================
+
+function updateUI() {
+    pHpFill.style.width = (player.hp / player.maxHp * 100) + "%";
+    eHpFill.style.width = (enemy.hp / enemy.maxHp * 100) + "%";
+    pSpFill.style.width = (player.sp / player.maxSp * 100) + "%";
+
+    if (player.comboCount > 1 && player.comboTimer > 0) {
+        comboText.textContent = player.comboCount + " HIT PROJECTION COMBO";
+    } else {
+        comboText.textContent = "";
+    }
+}
+// =========================================================
+// MAIN UPDATE FUNCTION
+// =========================================================
+
+function update() {
+
+    // Slow motion decay
+    if (slowMoTime > 0) {
+        slowMoTime--;
+        if (slowMoTime <= 0) slowMoFactor = 1;
+    }
+
+    // Physics
+    player.applyGravity();
+    enemy.applyGravity();
+
+    // Input + AI
+    player.handleInput();
+    enemy.updateAI(player);
+
+    // Movement
+    player.applyMovement();
+    enemy.applyMovement();
+
+    // State updates
+    player.updateState();
+    enemy.updateState();
+
+    // Combo + parry updates
+    player.updateCombo();
+    enemy.updateCombo();
+
+    player.updateParry();
+    enemy.updateParry();
+
+    // Combat resolution
+    handleCombat();
+
+    // VFX
+    updateSparks();
+    updateAfterimages();
+
+    // UI
+    updateUI();
+}
+
+// =========================================================
+// DRAW FUNCTION
+// =========================================================
+
+function draw() {
+
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (shakeTime > 0) {
+        shakeTime--;
+        offsetX = randRange(-shakeIntensity, shakeIntensity);
+        offsetY = randRange(-shakeIntensity, shakeIntensity);
+    }
+
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Ground
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, GROUND_Y, canvas.width, canvas.height - GROUND_Y);
+
+    // Background speed lines
+    ctx.strokeStyle = "rgba(255,255,255,0.05)";
+    for (let i = 0; i < canvas.width; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 40, canvas.height);
+        ctx.stroke();
+    }
+
+    // VFX
+    drawAfterimages();
+    drawSparks();
+
+    // Fighters
+    player.draw();
+    enemy.draw();
+
+    ctx.restore();
+}
+
+// =========================================================
+// GAME LOOP — FIXED 24 FPS
+// =========================================================
+
+let lastTime = performance.now();
+let accumulator = 0;
+
+function gameLoop(now) {
+    const delta = now - lastTime;
+    lastTime = now;
+    accumulator += delta;
+
+    while (accumulator >= STEP) {
+        update();
+        accumulator -= STEP;
+    }
+
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+
+</script>
+
+</body>
+</html>
+<!-- ========================================================= -->
+<!-- EXTENDED ATTACK SYSTEM — PLAYER SPECIAL MOVES             -->
+<!-- ========================================================= -->
+
+<script>
+// Projection Step (micro-teleport)
+let projStepCooldown = 0;
+
+function handleProjectionStep(player) {
+    if (projStepCooldown > 0) projStepCooldown--;
+
+    if (keys["t"] && projStepCooldown === 0) {
+        projStepCooldown = 20;
+
+        const distance = 40;
+        player.x += player.facing * distance;
+
+        for (let i = 0; i < 5; i++) {
+            addAfterimage(
+                player.x - player.facing * i * 6,
+                player.y,
+                player.w,
+                player.h,
+                "rgba(180,220,255,0.8)"
+            );
+        }
+
+        player.state = "attack";
+        player.stateTimer = 8;
+        player.attackType = "projStepHit";
+
+        const atkW = 40;
+        const atkH = 40;
+        const atkX = player.facing === 1 ? player.x + player.w : player.x - atkW;
+        const atkY = player.y + 20;
+
+        player.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        player.attackDamage = 6;
+    }
+}
+
+// =========================================================
+// ENEMY SPECIAL MOVES
+// =========================================================
+
+function enemyShoulderCharge(enemy, player) {
+    const dx = Math.abs(player.centerX() - enemy.centerX());
+    if (dx < 200 && Math.random() < 0.02) {
+
+        enemy.state = "attack";
+        enemy.stateTimer = 26;
+        enemy.attackType = "shoulderCharge";
+
+        enemy.x += enemy.facing * 18;
+
+        const atkW = 80;
+        const atkH = 50;
+        const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+        const atkY = enemy.y + 20;
+
+        enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        enemy.attackDamage = 14;
+
+        shakeTime = 12;
+        shakeIntensity = 8;
+    }
+}
+
+function enemySpinKick(enemy, player) {
+    if (!player.onGround && Math.random() < 0.015) {
+
+        enemy.state = "attack";
+        enemy.stateTimer = 20;
+        enemy.attackType = "spinKick";
+
+        const atkW = 60;
+        const atkH = 80;
+        const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+        const atkY = enemy.y - 20;
+
+        enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        enemy.attackDamage = 13;
+
+        shakeTime = 8;
+        shakeIntensity = 6;
+    }
+}
+
+// =========================================================
+// EXTENDED AI
+// =========================================================
+
+function updateEnemyAIExtended(enemy, player) {
+
+    enemy.updateAI(player);
+
+    enemyShoulderCharge(enemy, player);
+    enemySpinKick(enemy, player);
+
+    const dx = Math.abs(player.centerX() - enemy.centerX());
+
+    if (dx < 80 && Math.random() < 0.03) {
+        enemy.vx = -enemy.facing * 6;
+        enemy.state = "run";
+    }
+
+    if (player.hp < 30 && Math.random() < 0.02) {
+        enemy.vx = enemy.facing * 8;
+        enemy.state = "run";
+    }
+}
+
+// =========================================================
+// PROJECTION SORCERY RULE-BREAK SYSTEM
+// =========================================================
+
+function checkProjectionRuleBreak(fighter, lastX, lastY) {
+
+    const dx = Math.abs(fighter.x - lastX);
+    const dy = Math.abs(fighter.y - lastY);
+
+    if (dx > 40 || dy > 40) {
+
+        fighter.state = "frozen";
+        fighter.stateTimer = 12;
+
+        for (let i = 0; i < 6; i++) {
+            addAfterimage(
+                fighter.x,
+                fighter.y,
+                fighter.w,
+                fighter.h,
+                "rgba(255,255,255,0.4)"
+            );
+        }
+
+        shakeTime = 6;
+        shakeIntensity = 4;
+    }
+}
+
+// =========================================================
+// EXTENDED UPDATE HOOKS
+// =========================================================
+
+let lastPlayerX = 0;
+let lastPlayerY = 0;
+
+let lastEnemyX = 0;
+let lastEnemyY = 0;
+
+function extendedUpdate() {
+
+    checkProjectionRuleBreak(player, lastPlayerX, lastPlayerY);
+    checkProjectionRuleBreak(enemy, lastEnemyX, lastEnemyY);
+
+    lastPlayerX = player.x;
+    lastPlayerY = player.y;
+
+    lastEnemyX = enemy.x;
+    lastEnemyY = enemy.y;
+
+    handleProjectionStep(player);
+
+    updateEnemyAIExtended(enemy, player);
+}
+</script>
+<!-- ========================================================= -->
+<!-- EXTENDED ATTACK SYSTEM — PLAYER SPECIAL MOVES             -->
+<!-- ========================================================= -->
+
+<script>
+// Projection Step (micro-teleport)
+let projStepCooldown = 0;
+
+function handleProjectionStep(player) {
+    if (projStepCooldown > 0) projStepCooldown--;
+
+    if (keys["t"] && projStepCooldown === 0) {
+        projStepCooldown = 20;
+
+        const distance = 40;
+        player.x += player.facing * distance;
+
+        for (let i = 0; i < 5; i++) {
+            addAfterimage(
+                player.x - player.facing * i * 6,
+                player.y,
+                player.w,
+                player.h,
+                "rgba(180,220,255,0.8)"
+            );
+        }
+
+        player.state = "attack";
+        player.stateTimer = 8;
+        player.attackType = "projStepHit";
+
+        const atkW = 40;
+        const atkH = 40;
+        const atkX = player.facing === 1 ? player.x + player.w : player.x - atkW;
+        const atkY = player.y + 20;
+
+        player.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        player.attackDamage = 6;
+    }
+}
+
+// =========================================================
+// ENEMY SPECIAL MOVES
+// =========================================================
+
+function enemyShoulderCharge(enemy, player) {
+    const dx = Math.abs(player.centerX() - enemy.centerX());
+    if (dx < 200 && Math.random() < 0.02) {
+
+        enemy.state = "attack";
+        enemy.stateTimer = 26;
+        enemy.attackType = "shoulderCharge";
+
+        enemy.x += enemy.facing * 18;
+
+        const atkW = 80;
+        const atkH = 50;
+        const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+        const atkY = enemy.y + 20;
+
+        enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        enemy.attackDamage = 14;
+
+        shakeTime = 12;
+        shakeIntensity = 8;
+    }
+}
+
+function enemySpinKick(enemy, player) {
+    if (!player.onGround && Math.random() < 0.015) {
+
+        enemy.state = "attack";
+        enemy.stateTimer = 20;
+        enemy.attackType = "spinKick";
+
+        const atkW = 60;
+        const atkH = 80;
+        const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+        const atkY = enemy.y - 20;
+
+        enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+        enemy.attackDamage = 13;
+
+        shakeTime = 8;
+        shakeIntensity = 6;
+    }
+}
+
+// =========================================================
+// EXTENDED AI
+// =========================================================
+
+function updateEnemyAIExtended(enemy, player) {
+
+    enemy.updateAI(player);
+
+    enemyShoulderCharge(enemy, player);
+    enemySpinKick(enemy, player);
+
+    const dx = Math.abs(player.centerX() - enemy.centerX());
+
+    if (dx < 80 && Math.random() < 0.03) {
+        enemy.vx = -enemy.facing * 6;
+        enemy.state = "run";
+    }
+
+    if (player.hp < 30 && Math.random() < 0.02) {
+        enemy.vx = enemy.facing * 8;
+        enemy.state = "run";
+    }
+}
+
+// =========================================================
+// PROJECTION SORCERY RULE-BREAK SYSTEM
+// =========================================================
+
+function checkProjectionRuleBreak(fighter, lastX, lastY) {
+
+    const dx = Math.abs(fighter.x - lastX);
+    const dy = Math.abs(fighter.y - lastY);
+
+    if (dx > 40 || dy > 40) {
+
+        fighter.state = "frozen";
+        fighter.stateTimer = 12;
+
+        for (let i = 0; i < 6; i++) {
+            addAfterimage(
+                fighter.x,
+                fighter.y,
+                fighter.w,
+                fighter.h,
+                "rgba(255,255,255,0.4)"
+            );
+        }
+
+        shakeTime = 6;
+        shakeIntensity = 4;
+    }
+}
+
+// =========================================================
+// EXTENDED UPDATE HOOKS
+// =========================================================
+
+let lastPlayerX = 0;
+let lastPlayerY = 0;
+
+let lastEnemyX = 0;
+let lastEnemyY = 0;
+
+function extendedUpdate() {
+
+    checkProjectionRuleBreak(player, lastPlayerX, lastPlayerY);
+    checkProjectionRuleBreak(enemy, lastEnemyX, lastEnemyY);
+
+    lastPlayerX = player.x;
+    lastPlayerY = player.y;
+
+    lastEnemyX = enemy.x;
+    lastEnemyY = enemy.y;
+
+    handleProjectionStep(player);
+
+    updateEnemyAIExtended(enemy, player);
+}
+</script>
+<script>
+/* =========================================================
+   DEL 7 — MASSIVE SYSTEM EXPANSION
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   HITSTOP SYSTEM
+   --------------------------------------------------------- */
+
+let hitstop = 0;
+
+function applyHitstop(frames) {
+    hitstop = Math.max(hitstop, frames);
+}
+
+function updateHitstop() {
+    if (hitstop > 0) {
+        hitstop--;
+        return true; // freeze logic
+    }
+    return false;
+}
+
+/* ---------------------------------------------------------
+   PERFECT PARRY SYSTEM
+   --------------------------------------------------------- */
+
+function checkPerfectParry(attacker, defender) {
+    if (defender.parryWindow > 0 && defender.parryWindow <= 3) {
+        defender.parrySuccessTimer = 30;
+        defender.gainSp(30);
+
+        slowMoTime = 30;
+        slowMoFactor = 0.25;
+
+        shakeTime = 20;
+        shakeIntensity = 10;
+
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 100, g: 255, b: 255 });
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 100, g: 255, b: 255 });
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 100, g: 255, b: 255 });
+
+        attacker.takeDamage(8, "counter", -attacker.facing * 12, -12);
+
+        return true;
+    }
+    return false;
+}
+
+/* ---------------------------------------------------------
+   BURST SYSTEM
+   --------------------------------------------------------- */
+
+let playerBurst = true;
+let enemyBurst = true;
+
+function tryBurst(defender, attacker) {
+    if (!defender.onGround && defender.stunTimer > 10) {
+        if ((defender === player && playerBurst) ||
+            (defender === enemy && enemyBurst)) {
+
+            if (defender === player) playerBurst = false;
+            if (defender === enemy) enemyBurst = false;
+
+            defender.state = "burst";
+            defender.stateTimer = 20;
+
+            shakeTime = 25;
+            shakeIntensity = 12;
+
+            for (let i = 0; i < 20; i++) {
+                spawnSpark(defender.centerX(), defender.centerY(), {
+                    r: randRange(150,255),
+                    g: randRange(150,255),
+                    b: randRange(150,255)
+                });
+            }
+
+            attacker.vx = -attacker.facing * 14;
+            attacker.vy = -12;
+
+            return true;
+        }
+    }
+    return false;
+}
+
+/* ---------------------------------------------------------
+   GUARD METER + GUARD BREAK
+   --------------------------------------------------------- */
+
+player.guard = 100;
+enemy.guard = 100;
+
+function applyGuardDamage(defender, amount) {
+    defender.guard -= amount;
+    if (defender.guard <= 0) {
+        defender.guard = 0;
+        defender.state = "guardBreak";
+        defender.stateTimer = 40;
+
+        shakeTime = 20;
+        shakeIntensity = 10;
+
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 255, g: 255, b: 0 });
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 255, g: 255, b: 0 });
+    }
+}
+
+/* ---------------------------------------------------------
+   CLASH SYSTEM
+   --------------------------------------------------------- */
+
+function checkClash(p1, p2) {
+    if (p1.attackHitbox && p2.attackHitbox) {
+        if (rectOverlap(p1.attackHitbox, p2.attackHitbox)) {
+
+            p1.attackHitbox = null;
+            p2.attackHitbox = null;
+
+            shakeTime = 8;
+            shakeIntensity = 6;
+
+            applyHitstop(6);
+
+            spawnSpark((p1.centerX()+p2.centerX())/2,
+                       (p1.centerY()+p2.centerY())/2,
+                       { r: 255, g: 255, b: 255 });
+
+            return true;
+        }
+    }
+    return false;
+}
+
+/* ---------------------------------------------------------
+   ADVANCED MOVEMENT — AIR DASH, DOUBLE JUMP, JUMP CANCEL
+   --------------------------------------------------------- */
+
+player.airDashUsed = false;
+player.doubleJumpUsed = false;
+
+function handleAdvancedMovement(f) {
+
+    // Reset on landing
+    if (f.onGround) {
+        f.airDashUsed = false;
+        f.doubleJumpUsed = false;
+    }
+
+    // Double jump
+    if (!f.onGround && !f.doubleJumpUsed && keys["w"]) {
+        f.vy = -18;
+        f.doubleJumpUsed = true;
+
+        addAfterimage(f.x, f.y, f.w, f.h, "rgba(200,200,255,0.8)");
+        addAfterimage(f.x, f.y, f.w, f.h, "rgba(200,200,255,0.8)");
+    }
+
+    // Air dash
+    if (!f.onGround && !f.airDashUsed && keys["l"]) {
+        f.vx = f.facing * 14;
+        f.vy = 0;
+        f.airDashUsed = true;
+
+        for (let i = 0; i < 6; i++) {
+            addAfterimage(f.x - f.facing * i * 4, f.y, f.w, f.h, "rgba(150,200,255,0.7)");
+        }
+    }
+}
+
+/* ---------------------------------------------------------
+   OTG (Off The Ground) ATTACKS
+   --------------------------------------------------------- */
+
+function applyOTG(attacker, defender) {
+    if (defender.onGround && defender.state === "hitstun") {
+        defender.takeDamage(3, "normal", attacker.facing * 4, -4);
+        spawnSpark(defender.centerX(), defender.centerY(), { r: 255, g: 200, b: 200 });
+    }
+}
+
+/* ---------------------------------------------------------
+   HARD KNOCKDOWN / SOFT KNOCKDOWN
+   --------------------------------------------------------- */
+
+function applyKnockdown(f, type) {
+    if (type === "hard") {
+        f.state = "knockdown";
+        f.stateTimer = 40;
+        f.vx = 0;
+        f.vy = 0;
+    } else {
+        f.state = "softKD";
+        f.stateTimer = 20;
+    }
+}
+
+/* ---------------------------------------------------------
+   CAMERA SYSTEM — ZOOM + PAN + SPEEDLINES
+   --------------------------------------------------------- */
+
+let camZoom = 1.0;
+let camTargetZoom = 1.0;
+
+let camX = 0;
+let camY = 0;
+
+function updateCamera() {
+
+    const midX = (player.centerX() + enemy.centerX()) / 2;
+    const midY = (player.centerY() + enemy.centerY()) / 2;
+
+    camX += (midX - camX - canvas.width / 2) * 0.08;
+    camY += (midY - camY - canvas.height / 2) * 0.08;
+
+    const dist = Math.abs(player.centerX() - enemy.centerX());
+    camTargetZoom = clamp(1.0 - dist / 2000, 0.7, 1.0);
+
+    camZoom += (camTargetZoom - camZoom) * 0.05;
+}
+
+/* ---------------------------------------------------------
+   ENVIRONMENT HITBOXES (STAGE OBJECTS)
+   --------------------------------------------------------- */
+
+const stageObjects = [
+    { x: 300, y: GROUND_Y - 40, w: 80, h: 40, bounce: true },
+    { x: 900, y: GROUND_Y - 60, w: 60, h: 60, bounce: false }
+];
+
+function updateStageObjects(f) {
+    for (const obj of stageObjects) {
+        const hb = { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+        if (rectOverlap(f.hitbox, hb)) {
+
+            if (obj.bounce) {
+                f.vx = -f.vx * 0.8;
+                f.vy = -10;
+                shakeTime = 6;
+                shakeIntensity = 4;
+            } else {
+                if (f.x + f.w > obj.x && f.x < obj.x) {
+                    f.x = obj.x - f.w;
+                }
+                if (f.x < obj.x + obj.w && f.x + f.w > obj.x + obj.w) {
+                    f.x = obj.x + obj.w;
+                }
+            }
+        }
+    }
+}
+
+/* ---------------------------------------------------------
+   EXTENDED AI — PRESSURE, ZONING, ANTI-RUSHDOWN
+   --------------------------------------------------------- */
+
+enemy.mode = "neutral";
+
+function updateEnemyAIModes() {
+
+    const dx = Math.abs(player.centerX() - enemy.centerX());
+
+    if (dx > 400) enemy.mode = "zoning";
+    else if (dx < 120) enemy.mode = "pressure";
+    else enemy.mode = "neutral";
+
+    if (enemy.mode === "zoning") {
+        enemy.vx = -enemy.facing * 2;
+        if (Math.random() < 0.02) enemySpinKick(enemy, player);
+    }
+
+    if (enemy.mode === "pressure") {
+        enemy.vx = enemy.facing * 4;
+        if (Math.random() < 0.04) enemyShoulderCharge(enemy, player);
+    }
+}
+
+/* ---------------------------------------------------------
+   OVERRIDE UPDATE AGAIN — MASSIVE HOOK
+   --------------------------------------------------------- */
+
+const _update7 = update;
+
+function update() {
+
+    if (updateHitstop()) return;
+
+    _update7();
+
+    handleAdvancedMovement(player);
+    handleAdvancedMovement(enemy);
+
+    updateCamera();
+
+    updateStageObjects(player);
+    updateStageObjects(enemy);
+
+    updateEnemyAIModes();
+
+    if (player.state === "hitstun") tryBurst(player, enemy);
+    if (enemy.state === "hitstun") tryBurst(enemy, player);
+}
+</script>
+<script>
+/* =========================================================
+   DEL 8 — Multiple enemy variants + JJK‑inspirerad parodi
+   ========================================================= */
+
+// ---------------------------------------------------------
+// ENEMY VARIANT DEFINITIONS (PARODY STYLE)
+// ---------------------------------------------------------
+
+const enemyVariants = [
+    {
+        name: "Cursed Brawler",
+        colorBody: "#ff4d4d",
+        colorAura: "rgba(255,80,80,0.7)",
+        weapon: "None",
+        style: "rushdown",
+        baseHp: 100,
+        baseSp: 50,
+        aiAggression: 0.7,
+        aiZoning: 0.2
+    },
+    {
+        name: "Cursed Blade User",
+        colorBody: "#e0e0ff",
+        colorAura: "rgba(150,150,255,0.8)",
+        weapon: "Cursed Sword",
+        style: "midrange",
+        baseHp: 90,
+        baseSp: 80,
+        aiAggression: 0.5,
+        aiZoning: 0.5
+    },
+    {
+        name: "Domain Parody Specialist",
+        colorBody: "#ffe0b3",
+        colorAura: "rgba(255,220,150,0.9)",
+        weapon: "Paper Talisman",
+        style: "setup",
+        baseHp: 110,
+        baseSp: 120,
+        aiAggression: 0.4,
+        aiZoning: 0.7
+    }
+];
+
+let currentEnemyIndex = 0;
+
+// ---------------------------------------------------------
+// APPLY VARIANT TO EXISTING ENEMY INSTANCE
+// ---------------------------------------------------------
+
+function applyEnemyVariant(enemy, variant) {
+    enemy.colorBody = variant.colorBody;
+    enemy.colorAura = variant.colorAura;
+    enemy.hp = variant.baseHp;
+    enemy.maxHp = variant.baseHp;
+    enemy.sp = 0;
+    enemy.maxSp = variant.baseSp;
+
+    enemy.weaponName = variant.weapon;
+    enemy.style = variant.style;
+    enemy.aiAggression = variant.aiAggression;
+    enemy.aiZoning = variant.aiZoning;
+
+    enemy.mode = "neutral";
+    enemy.state = "idle";
+    enemy.stateTimer = 0;
+    enemy.vx = 0;
+    enemy.vy = 0;
+}
+
+// initial variant
+applyEnemyVariant(enemy, enemyVariants[currentEnemyIndex]);
+
+// ---------------------------------------------------------
+// EXTRA ENEMY ATTACKS BASERAT PÅ VARIANT
+// ---------------------------------------------------------
+
+function enemyVariantAttack(enemy, player) {
+    if (enemy.style === "rushdown") {
+        if (Math.random() < 0.03) {
+            enemy.state = "attack";
+            enemy.stateTimer = 18;
+            enemy.attackType = "rushCombo";
+
+            const atkW = 70;
+            const atkH = 45;
+            const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+            const atkY = enemy.y + 15;
+
+            enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            enemy.attackDamage = 10;
+
+            shakeTime = 8;
+            shakeIntensity = 5;
+        }
+    }
+
+    if (enemy.style === "midrange") {
+        if (Math.random() < 0.025) {
+            enemy.state = "attack";
+            enemy.stateTimer = 22;
+            enemy.attackType = "cursedSlash";
+
+            const atkW = 110;
+            const atkH = 40;
+            const atkX = enemy.facing === 1 ? enemy.x + enemy.w : enemy.x - atkW;
+            const atkY = enemy.y + 10;
+
+            enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            enemy.attackDamage = 13;
+
+            spawnSpark(enemy.centerX(), enemy.centerY(), { r: 200, g: 200, b: 255 });
+        }
+    }
+
+    if (enemy.style === "setup") {
+        if (Math.random() < 0.02) {
+            enemy.state = "attack";
+            enemy.stateTimer = 26;
+            enemy.attackType = "talismanTrap";
+
+            const atkW = 60;
+            const atkH = 80;
+            const atkX = enemy.facing === 1 ? enemy.x + enemy.w + 40 : enemy.x - atkW - 40;
+            const atkY = enemy.y - 10;
+
+            enemy.attackHitbox = { x: atkX, y: atkY, w: atkW, h: atkH };
+            enemy.attackDamage = 9;
+
+            spawnSpark(atkX + atkW / 2, atkY + atkH / 2, { r: 255, g: 230, b: 180 });
+        }
+    }
+}
+
+// hook into extended AI
+const _updateEnemyAIExtended_old = updateEnemyAIExtended;
+function updateEnemyAIExtended(enemy, player) {
+    _updateEnemyAIExtended_old(enemy, player);
+    enemyVariantAttack(enemy, player);
+}
+
+// ---------------------------------------------------------
+// SIMPLE CHARACTER SELECT VIA TANGENTBORD
+// 1 = variant 0, 2 = variant 1, 3 = variant 2
+// ---------------------------------------------------------
+
+document.addEventListener("keydown", e => {
+    if (e.key === "1") {
+        currentEnemyIndex = 0;
+        applyEnemyVariant(enemy, enemyVariants[0]);
+    }
+    if (e.key === "2") {
+        currentEnemyIndex = 1;
+        applyEnemyVariant(enemy, enemyVariants[1]);
+    }
+    if (e.key === "3") {
+        currentEnemyIndex = 2;
+        applyEnemyVariant(enemy, enemyVariants[2]);
+    }
+});
+
+// ---------------------------------------------------------
+// DRAW WEAPON / STYLE HINT (PARODY HUD)
+// ---------------------------------------------------------
+
+const enemyInfoDiv = document.createElement("div");
+enemyInfoDiv.style.marginTop = "4px";
+enemyInfoDiv.style.fontSize = "13px";
+enemyInfoDiv.style.color = "#ccc";
+enemyInfoDiv.textContent = "";
+document.getElementById("ui").appendChild(enemyInfoDiv);
+
+const _updateUI_old = updateUI;
+function updateUI() {
+    _updateUI_old();
+
+    const v = enemyVariants[currentEnemyIndex];
+    enemyInfoDiv.textContent =
+        "Enemy: " + v.name +
+        " | Weapon: " + v.weapon +
+        " | Style: " + v.style;
+}
+</script>
