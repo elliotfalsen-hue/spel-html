@@ -360,7 +360,7 @@ const camera = {
         let offsetY = 0;
         if (this.shakeTime > 0 && this.shakeIntensity > 0) {
             offsetX = (Math.random() - 0.5) * this.shakeIntensity;
-            offsetY = (Math.random() - 0.5) * this.shshakeIntensity;
+            offsetY = (Math.random() - 0.5) * this.shakeIntensity;
         }
         ctx.translate(-this.x + offsetX, -this.y + offsetY);
     },
@@ -371,16 +371,6 @@ const camera = {
         this.shakeTime = Math.max(this.shakeTime, duration);
         this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
     }
-};
-// fix typo in apply
-camera.apply = function() {
-    let offsetX = 0;
-    let offsetY = 0;
-    if (this.shakeTime > 0 && this.shakeIntensity > 0) {
-        offsetX = (Math.random() - 0.5) * this.shakeIntensity;
-        offsetY = (Math.random() - 0.5) * this.shakeIntensity;
-    }
-    ctx.translate(-this.x + offsetX, -this.y + offsetY);
 };
 
 // =========================================================
@@ -932,7 +922,7 @@ class XPOrb {
 const xpOrbs = [];
 
 // =========================================================
-// UPGRADE SYSTEM
+// UPGRADE SYSTEM (POP CULTURE NAMES)
 // =========================================================
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradeOptionsContainer = document.getElementById("upgradeOptions");
@@ -942,7 +932,7 @@ const upgradeSubtitle = document.getElementById("upgradeSubtitle");
 const allUpgrades = [
     {
         id: "firerate1",
-        name: "Rapid Focus",
+        name: "Sandevistan Sync",
         tier: "I",
         description: "Fire rate increased by 20%.",
         hint: "More bullets means more chances to hit and crit.",
@@ -952,60 +942,60 @@ const allUpgrades = [
     },
     {
         id: "firerate2",
-        name: "Rapid Focus+",
+        name: "Sandevistan Overclock",
         tier: "II",
         description: "Fire rate increased by 25%.",
-        hint: "Stacks with other fire rate upgrades.",
+        hint: "Stacks beautifully with other fire rate upgrades.",
         apply() {
             player.fireRate *= 0.75;
         }
     },
     {
         id: "firerate3",
-        name: "Bullet Storm",
+        name: "Edgerunner Mode",
         tier: "III",
         description: "Fire rate increased by 35%.",
-        hint: "Turns your weapon into a near-constant stream.",
+        hint: "Your weapon feels like time itself is slowing down.",
         apply() {
             player.fireRate *= 0.65;
         }
     },
     {
         id: "damage1",
-        name: "Sharpened Rounds",
+        name: "Smartgun Target Assist v1",
         tier: "I",
         description: "Bullet damage increased by 25%.",
-        hint: "Great early scaling for all builds.",
+        hint: "Baseline damage boost for any build.",
         apply() {
             player.bulletDamage *= 1.25;
         }
     },
     {
         id: "damage2",
-        name: "Piercing Impact",
+        name: "Smartgun Target Assist v2",
         tier: "II",
         description: "Bullet damage increased by 30%.",
-        hint: "Pairs well with multi-shot upgrades.",
+        hint: "Pairs well with multi-shot and pierce.",
         apply() {
             player.bulletDamage *= 1.3;
         }
     },
     {
         id: "damage3",
-        name: "Cataclysmic Rounds",
+        name: "Smartgun Target Assist v3",
         tier: "III",
         description: "Bullet damage increased by 40%.",
-        hint: "High damage per hit for elite enemies.",
+        hint: "Turns every hit into a serious threat.",
         apply() {
             player.bulletDamage *= 1.4;
         }
     },
     {
         id: "multishot1",
-        name: "Twin Shot",
+        name: "Double-Tap Protocol",
         tier: "I",
         description: "Fire +1 projectile per shot.",
-        hint: "Slight spread, but more coverage.",
+        hint: "Slight spread, but much better coverage.",
         apply() {
             player.projectilesPerShot += 1;
             player.spread += 0.02;
@@ -1013,7 +1003,7 @@ const allUpgrades = [
     },
     {
         id: "multishot2",
-        name: "Triple Volley",
+        name: "Triple-Tap Protocol",
         tier: "II",
         description: "Fire +2 projectiles per shot.",
         hint: "Great with damage and crit upgrades.",
@@ -1024,10 +1014,10 @@ const allUpgrades = [
     },
     {
         id: "multishot3",
-        name: "Fan of Blades",
+        name: "Reaper Spread Matrix",
         tier: "III",
         description: "Fire +3 projectiles per shot.",
-        hint: "Massive coverage, but watch your accuracy.",
+        hint: "Massive cone of fire, ideal for hordes.",
         apply() {
             player.projectilesPerShot += 3;
             player.spread += 0.04;
@@ -1035,7 +1025,7 @@ const allUpgrades = [
     },
     {
         id: "speed1",
-        name: "Fleetfoot",
+        name: "Kerenzikov Dashware",
         tier: "I",
         description: "Movement speed increased by 15%.",
         hint: "Helps dodging and repositioning.",
@@ -1045,30 +1035,30 @@ const allUpgrades = [
     },
     {
         id: "speed2",
-        name: "Phase Stride",
+        name: "Kerenzikov Hyper-Stride",
         tier: "II",
         description: "Movement speed increased by 20%.",
-        hint: "Kiting enemies becomes easier.",
+        hint: "Kiting enemies becomes much easier.",
         apply() {
             player.speed *= 1.2;
         }
     },
     {
         id: "speed3",
-        name: "Blinkstep",
+        name: "Kerenzikov Ghost-Stride",
         tier: "III",
         description: "Movement speed increased by 25%.",
-        hint: "Stay ahead of even the fastest foes.",
+        hint: "You feel like you're phasing through danger.",
         apply() {
             player.speed *= 1.25;
         }
     },
     {
         id: "hp1",
-        name: "Vital Core",
+        name: "Biotech Heart-Patch",
         tier: "I",
         description: "Max HP increased by 20. Heal 20 HP.",
-        hint: "More room for mistakes.",
+        hint: "More room for mistakes early on.",
         apply() {
             player.maxHp += 20;
             player.hp = Math.min(player.maxHp, player.hp + 20);
@@ -1076,10 +1066,10 @@ const allUpgrades = [
     },
     {
         id: "hp2",
-        name: "Reinforced Shell",
+        name: "Titanium Bone-Lacing",
         tier: "II",
         description: "Max HP increased by 30. Heal 30 HP.",
-        hint: "Pairs well with regeneration.",
+        hint: "Pairs well with regeneration and sustain.",
         apply() {
             player.maxHp += 30;
             player.hp = Math.min(player.maxHp, player.hp + 30);
@@ -1087,27 +1077,27 @@ const allUpgrades = [
     },
     {
         id: "regen1",
-        name: "Slow Regeneration",
+        name: "Nano-Heal Weave",
         tier: "I",
         description: "Regenerate 1 HP per second after not taking damage for 4s.",
-        hint: "Sustain for long fights.",
+        hint: "Sustain for long waves.",
         apply() {
             player.regenRate += 1;
         }
     },
     {
         id: "regen2",
-        name: "Accelerated Regeneration",
+        name: "Nano-Heal Weave Mk.II",
         tier: "II",
         description: "Regenerate an additional 1.5 HP per second.",
-        hint: "Stack with other regen upgrades.",
+        hint: "Stacks with other regen upgrades.",
         apply() {
             player.regenRate += 1.5;
         }
     },
     {
         id: "magnet1",
-        name: "Magnetic Field",
+        name: "Loot Vacuum v1.0",
         tier: "I",
         description: "XP pickup radius increased by 40%.",
         hint: "Level faster without chasing every orb.",
@@ -1117,17 +1107,17 @@ const allUpgrades = [
     },
     {
         id: "magnet2",
-        name: "Gravitic Well",
+        name: "Loot Vacuum v2.0",
         tier: "II",
         description: "XP pickup radius increased by 50%.",
-        hint: "XP orbs fly to you from afar.",
+        hint: "XP orbs fly to you from across the arena.",
         apply() {
             player.magnetRadius *= 1.5;
         }
     },
     {
         id: "pierce1",
-        name: "Penetrating Shots",
+        name: "Monowire Penetration Mod",
         tier: "I",
         description: "Bullets pierce 1 additional enemy.",
         hint: "Great against clustered foes.",
@@ -1137,17 +1127,17 @@ const allUpgrades = [
     },
     {
         id: "pierce2",
-        name: "Shattering Rounds",
+        name: "Monowire Penetration Mk.II",
         tier: "II",
         description: "Bullets pierce 2 additional enemies.",
-        hint: "Synergizes with multi-shot.",
+        hint: "Synergizes with multi-shot builds.",
         apply() {
             player.pierce += 2;
         }
     },
     {
         id: "crit1",
-        name: "Critical Instinct",
+        name: "Deadeye Optics v1",
         tier: "I",
         description: "Crit chance increased by 6%.",
         hint: "Crits deal double damage.",
@@ -1157,7 +1147,7 @@ const allUpgrades = [
     },
     {
         id: "crit2",
-        name: "Lethal Precision",
+        name: "Deadeye Optics v2",
         tier: "II",
         description: "Crit chance increased by 8%.",
         hint: "More frequent high-damage hits.",
@@ -1167,7 +1157,7 @@ const allUpgrades = [
     },
     {
         id: "crit3",
-        name: "Overwhelming Force",
+        name: "Deadeye Optics v3",
         tier: "III",
         description: "Crit multiplier increased to 2.6x.",
         hint: "Crits become devastating.",
@@ -1177,7 +1167,7 @@ const allUpgrades = [
     },
     {
         id: "bulletSize1",
-        name: "Heavy Rounds",
+        name: "Gorilla Arms Payload",
         tier: "I",
         description: "Bullet size increased by 20%.",
         hint: "Easier to hit fast enemies.",
@@ -1187,7 +1177,7 @@ const allUpgrades = [
     },
     {
         id: "bulletSpeed1",
-        name: "Accelerated Payload",
+        name: "Tech-Weapon Overcharge",
         tier: "I",
         description: "Bullet speed increased by 25%.",
         hint: "Improves effective range and accuracy.",
@@ -1197,7 +1187,7 @@ const allUpgrades = [
     },
     {
         id: "special1",
-        name: "Kinetic Barrier",
+        name: "Kinetic Barrier Emitter",
         tier: "I",
         description: "Taking damage releases a shockwave that knocks back nearby enemies.",
         hint: "Helps when surrounded.",
@@ -1207,7 +1197,7 @@ const allUpgrades = [
     },
     {
         id: "special2",
-        name: "Temporal Slip",
+        name: "Temporal Slip Routine",
         tier: "II",
         description: "Briefly slow time when your HP drops below 30%. (once per wave)",
         hint: "Gives you a chance to recover.",
