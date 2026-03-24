@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HTML5 Arena Roguelite</title>
+<style>
+    * {
+        box-sizing: border-box;
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #05060a;
+        color: #eee;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        overflow: hidden;
+    }
+    #gameCanvas {
+        display: block;
+        background: radial-gradient(circle at center, #1a1f2b 0, #05060a 70%);
+    }
+    #uiLayer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        pointer-events: none;
+        width: 100%;
+        height: 100%;
+    }
+    #topBar {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 16px;
+        padding: 6px 12px;
+        background: rgba(0,0,0,0.4);
+        border-radius: 999px;
+        pointer-events: none;
+        font-size: 14px;
+    }
+    .topBarItem {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .barLabel {
+        opacity: 0.7;
+    }
+    #hpBarContainer, #xpBarContainer {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40%;
+        height: 10px;
+        background: rgba(255,255,255,0.08);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    #hpBarContainer {
+        bottom: 40px;
+    }
+    #xpBarContainer {
+        bottom: 24px;
+    }
+    #hpBarFill, #xpBarFill {
+        height: 100%;
+        width: 50%;
+        border-radius: 999px;
+    }
+    #hpBarFill {
+        background: linear-gradient(90deg, #ff4b4b, #ff9b4b);
+    }
+    #xpBarFill {
+        background: linear-gradient(90deg, #4b9bff, #4bffb7);
+    }
+    #centerMessage {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        pointer-events: none;
+        text-shadow: 0 0 12px rgba(0,0,0,0.8);
+    }
+    #centerMessage h1 {
+        margin: 0 0 8px;
+        font-size: 40px;
+        letter-spacing: 2px;
+    }
+    #centerMessage p {
+        margin: 4px 0;
+        font-size: 14px;
+        opacity: 0.8;
+    }
+    #centerMessage .hint {
+        margin-top: 12px;
+        font-size: 12px;
+        opacity: 0.6;
+    }
+    #upgradePanel {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(720px, 90vw);
+        background: rgba(5, 6, 10, 0.96);
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        padding: 20px 24px 16px;
+        display: none;
+        pointer-events: auto;
+    }
+    #upgradeTitle {
+        font-size: 20px;
+        margin-bottom: 4px;
+    }
+    #upgradeSubtitle {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-bottom: 16px;
+    }
+    #upgradeOptions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+    }
+    .upgradeCard {
+        background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.08);
+        padding: 10px 10px 8px;
+        cursor: pointer;
+        transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease, background 0.08s ease;
+    }
+    .upgradeCard:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.7);
+        border-color: rgba(255,255,255,0.25);
+        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    }
+    .upgradeName {
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+    .upgradeTier {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-bottom: 6px;
+    }
+    .upgradeDesc {
+        font-size: 11px;
+        opacity: 0.8;
+        margin-bottom: 4px;
+    }
+    .upgradeHint {
+        font-size: 10px;
+        opacity: 0.6;
+    }
+    #pauseOverlay {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, rgba(0,0,0,0.4), rgba(0,0,0,0.9));
+        display: none;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+    }
+    #pauseBox {
+        background: rgba(10, 12, 18, 0.96);
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.1);
+        padding: 18px 22px 14px;
+        width: min(420px, 90vw);
+        text-align: center;
+        box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    }
+    #pauseBox h2 {
+        margin: 0 0 6px;
+        font-size: 22px;
+    }
+    #pauseBox p {
+        margin: 4px 0;
+        font-size: 13px;
+        opacity: 0.8;
+    }
+    #pauseBox .small {
+        font-size: 11px;
+        opacity: 0.6;
+        margin-top: 10px;
+    }
+    #bottomRightInfo {
+        position: absolute;
+        right: 10px;
+        bottom: 10px;
+        font-size: 11px;
+        opacity: 0.6;
+        pointer-events: none;
+        text-align: right;
+    }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="uiLayer">
+    <div id="topBar">
+        <div class="topBarItem">
+            <span class="barLabel">Time</span>
+            <span id="timeLabel">0:00</span>
+        </div>
+        <div class="topBarItem">
+            <span class="barLabel">Level</span>
+            <span id="levelLabel">1</span>
+        </div>
+        <div class="topBarItem">
+            <span class="barLabel">Kills</span>
+            <span id="killsLabel">0</span>
+        </div>
+        <div class="topBarItem">
+            <span class="barLabel">Wave</span>
+            <span id="waveLabel">1</span>
+        </div>
+    </div>
+    <div id="hpBarContainer">
+        <div id="hpBarFill"></div>
+    </div>
+    <div id="xpBarContainer">
+        <div id="xpBarFill"></div>
+    </div>
+    <div id="centerMessage">
+        <h1>ARENA ASCENT</h1>
+        <p>Survive as long as you can in the shifting arena.</p>
+        <p>Move with WASD, aim with mouse, shoot with left click or hold.</p>
+        <p>Level up, choose upgrades, and adapt to enemy waves.</p>
+        <p class="hint">Press SPACE to begin. Press ESC to pause.</p>
+    </div>
+    <div id="upgradePanel">
+        <div id="upgradeTitle">Choose an upgrade</div>
+        <div id="upgradeSubtitle">Your power grows. Select one of the offered enhancements.</div>
+        <div id="upgradeOptions"></div>
+    </div>
+    <div id="pauseOverlay">
+        <div id="pauseBox">
+            <h2>Paused</h2>
+            <p>Take a breath. The arena waits.</p>
+            <p>Press ESC to resume.</p>
+            <p class="small">Tip: Upgrades can synergize. Try stacking fire rate, projectiles, and movement speed.</p>
+        </div>
+    </div>
+    <div id="bottomRightInfo">
+        <div>HTML5 Arena Roguelite Prototype</div>
+        <div>WASD: Move · Mouse: Aim · LMB: Shoot · Space: Start · ESC: Pause</div>
+    </div>
+</div>
+
+<script>
+// =========================================================
+// CORE SETUP
+// =========================================================
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// =========================================================
+// INPUT
+// =========================================================
+const keys = {};
+const mouse = { x: 0, y: 0, down: false };
+
+window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === " ") e.preventDefault();
+});
+window.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+});
+window.addEventListener("mousemove", e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+});
+window.addEventListener("mousedown", e => {
+    if (e.button === 0) mouse.down = true;
+});
+window.addEventListener("mouseup", e => {
+    if (e.button === 0) mouse.down = false;
+});
+
+// =========================================================
+// GAME STATE
+// =========================================================
+const GAME_STATE = {
+    NOT_STARTED: 0,
+    RUNNING: 1,
+    PAUSED: 2,
+    LEVEL_UP: 3,
+    GAME_OVER: 4
+};
+
+let gameState = GAME_STATE.NOT_STARTED;
+let lastTimestamp = 0;
+let elapsedTime = 0;
+let waveNumber = 1;
+let waveTimer = 0;
+let kills = 0;
+
+// =========================================================
+// UTILS
+// =========================================================
+function randRange(min, max) {
+    return Math.random() * (max - min) + min;
+}
+function randInt(min, max) {
+    return Math.floor(randRange(min, max + 1));
+}
+function clamp(v, min, max) {
+    return v < min ? min : (v > max ? max : v);
+}
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+function angleBetween(x1, y1, x2, y2) {
+    return Math.atan2(y2 - y1, x2 - x1);
+}
+function distSq(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return dx * dx + dy * dy;
+}
+function randomChoice(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// =========================================================
+// CAMERA
+// =========================================================
+const camera = {
+    x: 0,
+    y: 0,
+    shakeTime: 0,
+    shakeIntensity: 0,
+    update(dt) {
+        if (this.shakeTime > 0) {
+            this.shakeTime -= dt;
+            if (this.shakeTime <= 0) {
+                this.shakeTime = 0;
+                this.shakeIntensity = 0;
+            }
+        }
+    },
+    apply() {
+        let offsetX = 0;
+        let offsetY = 0;
+        if (this.shakeTime > 0 && this.shakeIntensity > 0) {
+            offsetX = (Math.random() - 0.5) * this.shakeIntensity;
+            offsetY = (Math.random() - 0.5) * this.shshakeIntensity;
+        }
+        ctx.translate(-this.x + offsetX, -this.y + offsetY);
+    },
+    resetTransform() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+    },
+    shake(duration, intensity) {
+        this.shakeTime = Math.max(this.shakeTime, duration);
+        this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+    }
+};
+// fix typo in apply
+camera.apply = function() {
+    let offsetX = 0;
+    let offsetY = 0;
+    if (this.shakeTime > 0 && this.shakeIntensity > 0) {
+        offsetX = (Math.random() - 0.5) * this.shakeIntensity;
+        offsetY = (Math.random() - 0.5) * this.shakeIntensity;
+    }
+    ctx.translate(-this.x + offsetX, -this.y + offsetY);
+};
+
+// =========================================================
+// WORLD / ARENA
+// =========================================================
+const arena = {
+    width: 2600,
+    height: 2600,
+    tileSize: 80,
+    noiseSeed: Math.random() * 10000,
+    drawBackground() {
+        const ts = this.tileSize;
+        const cols = Math.ceil(this.width / ts);
+        const rows = Math.ceil(this.height / ts);
+        ctx.save();
+        ctx.fillStyle = "#05060a";
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const gx = x * ts;
+                const gy = y * ts;
+                const v = (Math.sin((x + this.noiseSeed) * 0.4) + Math.cos((y - this.noiseSeed) * 0.35)) * 0.5;
+                const base = 12 + v * 18;
+                const c = Math.floor(base);
+                ctx.fillStyle = `rgb(${c},${c+4},${c+10})`;
+                ctx.fillRect(gx, gy, ts, ts);
+
+                if ((x + y) % 7 === 0) {
+                    ctx.strokeStyle = `rgba(255,255,255,0.03)`;
+                    ctx.beginPath();
+                    ctx.arc(gx + ts * 0.5, gy + ts * 0.5, ts * 0.25, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.restore();
+    },
+    drawGridOverlay() {
+        const ts = this.tileSize;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.03)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= this.width; x += ts) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, this.height);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= this.height; y += ts) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(this.width, y);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+};
+
+// =========================================================
+// PARTICLES
+// =========================================================
+class Particle {
+    constructor(x, y, vx, vy, life, color, size, fade) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.life = life;
+        this.maxLife = life;
+        this.color = color;
+        this.size = size;
+        this.fade = fade;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = randRange(-2, 2);
+    }
+    update(dt) {
+        this.life -= dt;
+        this.x += this.vx * dt / 16.67;
+        this.y += this.vy * dt / 16.67;
+        this.vx *= 0.98;
+        this.vy *= 0.98;
+        this.rotation += this.rotationSpeed * dt / 1000;
+    }
+    draw() {
+        if (this.life <= 0) return;
+        const t = this.life / this.maxLife;
+        const alpha = this.fade ? t : 1;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.rect(-this.size * 0.5, -this.size * 0.5, this.size, this.size);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const particles = [];
+function spawnBurst(x, y, count, color, sizeMin, sizeMax, speedMin, speedMax, lifeMin, lifeMax) {
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = randRange(speedMin, speedMax);
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        const life = randRange(lifeMin, lifeMax);
+        const size = randRange(sizeMin, sizeMax);
+        particles.push(new Particle(x, y, vx, vy, life, color, size, true));
+    }
+}
+
+// =========================================================
+// PLAYER
+// =========================================================
+class Player {
+    constructor() {
+        this.x = arena.width / 2;
+        this.y = arena.height / 2;
+        this.radius = 18;
+        this.speed = 3.4;
+        this.baseSpeed = this.speed;
+        this.hp = 100;
+        this.maxHp = 100;
+        this.regenRate = 0;
+        this.regenCooldown = 4000;
+        this.timeSinceHit = 0;
+        this.fireCooldown = 0;
+        this.fireRate = 260;
+        this.bulletSpeed = 9;
+        this.bulletSize = 6;
+        this.bulletDamage = 12;
+        this.projectilesPerShot = 1;
+        this.spread = 0.06;
+        this.pierce = 0;
+        this.critChance = 0.08;
+        this.critMultiplier = 2.0;
+        this.xp = 0;
+        this.level = 1;
+        this.xpToNext = 60;
+        this.invincibleTime = 0;
+        this.magnetRadius = 140;
+        this.trailTimer = 0;
+    }
+    update(dt) {
+        const dtSec = dt / 1000;
+        let dx = 0;
+        let dy = 0;
+        if (keys["w"]) dy -= 1;
+        if (keys["s"]) dy += 1;
+        if (keys["a"]) dx -= 1;
+        if (keys["d"]) dx += 1;
+        const len = Math.hypot(dx, dy);
+        if (len > 0) {
+            dx /= len;
+            dy /= len;
+        }
+        const speed = this.speed;
+        this.x += dx * speed * dt / 16.67;
+        this.y += dy * speed * dt / 16.67;
+        this.x = clamp(this.x, this.radius + 10, arena.width - this.radius - 10);
+        this.y = clamp(this.y, this.radius + 10, arena.height - this.radius - 10);
+
+        this.timeSinceHit += dt;
+        if (this.regenRate > 0 && this.timeSinceHit > this.regenCooldown) {
+            this.hp += this.regenRate * dtSec;
+            if (this.hp > this.maxHp) this.hp = this.maxHp;
+        }
+
+        if (this.invincibleTime > 0) {
+            this.invincibleTime -= dt;
+            if (this.invincibleTime < 0) this.invincibleTime = 0;
+        }
+
+        this.fireCooldown -= dt;
+        if (mouse.down && this.fireCooldown <= 0) {
+            this.shoot();
+            this.fireCooldown = this.fireRate;
+        }
+
+        this.trailTimer += dt;
+        if (this.trailTimer > 40) {
+            this.trailTimer = 0;
+            spawnBurst(this.x, this.y, 1, "rgba(120,180,255,0.5)", 2, 4, 0.2, 0.6, 300, 600);
+        }
+    }
+    shoot() {
+        const angle = angleBetween(this.x, this.y, mouse.x + camera.x, mouse.y + camera.y);
+        const count = this.projectilesPerShot;
+        const spreadTotal = this.spread * (count - 1);
+        const startAngle = angle - spreadTotal * 0.5;
+        for (let i = 0; i < count; i++) {
+            const a = startAngle + this.spread * i + randRange(-0.01, 0.01);
+            const speed = this.bulletSpeed;
+            const vx = Math.cos(a) * speed;
+            const vy = Math.sin(a) * speed;
+            const isCrit = Math.random() < this.critChance;
+            const dmg = isCrit ? this.bulletDamage * this.critMultiplier : this.bulletDamage;
+            const color = isCrit ? "#ffeb3b" : "#9ad1ff";
+            projectiles.push(new Projectile(this.x, this.y, vx, vy, this.bulletSize, dmg, this.pierce, color));
+        }
+        spawnBurst(this.x, this.y, 4 + this.projectilesPerShot, "rgba(180,220,255,0.7)", 2, 4, 0.4, 1.2, 200, 500);
+    }
+    draw() {
+        ctx.save();
+        const t = performance.now() * 0.002;
+        const glow = 0.4 + Math.sin(t) * 0.2;
+        const gradient = ctx.createRadialGradient(this.x, this.y, this.radius * 0.2, this.x, this.y, this.radius * 1.6);
+        gradient.addColorStop(0, `rgba(180,220,255,${0.9})`);
+        gradient.addColorStop(0.4, `rgba(120,180,255,${0.6})`);
+        gradient.addColorStop(1, `rgba(40,60,120,${0})`);
+        ctx.globalAlpha = glow;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = "#e3f2fd";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        const angle = angleBetween(this.x, this.y, mouse.x + camera.x, mouse.y + camera.y);
+        const eyeOffset = this.radius * 0.45;
+        const ex = this.x + Math.cos(angle) * eyeOffset;
+        const ey = this.y + Math.sin(angle) * eyeOffset;
+        ctx.fillStyle = "#0b1020";
+        ctx.beginPath();
+        ctx.arc(ex, ey, this.radius * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (this.invincibleTime > 0) {
+            ctx.strokeStyle = "rgba(255,255,255,0.7)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 4, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    takeDamage(amount) {
+        if (this.invincibleTime > 0 || gameState !== GAME_STATE.RUNNING) return;
+        this.hp -= amount;
+        this.timeSinceHit = 0;
+        this.invincibleTime = 250;
+        camera.shake(200, 8);
+        spawnBurst(this.x, this.y, 12, "rgba(255,80,80,0.9)", 3, 7, 0.8, 2.4, 200, 600);
+        if (this.hp <= 0) {
+            this.hp = 0;
+            onPlayerDeath();
+        }
+    }
+    gainXP(amount) {
+        this.xp += amount;
+        while (this.xp >= this.xpToNext) {
+            this.xp -= this.xpToNext;
+            this.level++;
+            this.xpToNext = Math.floor(this.xpToNext * 1.35 + 10);
+            openUpgradePanel();
+        }
+    }
+}
+const player = new Player();
+
+// =========================================================
+// PROJECTILES
+// =========================================================
+class Projectile {
+    constructor(x, y, vx, vy, radius, damage, pierce, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = radius;
+        this.damage = damage;
+        this.pierce = pierce;
+        this.color = color;
+        this.life = 2200;
+    }
+    update(dt) {
+        this.life -= dt;
+        this.x += this.vx * dt / 16.67;
+        this.y += this.vy * dt / 16.67;
+    }
+    draw() {
+        ctx.save();
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const projectiles = [];
+
+// =========================================================
+// ENEMIES
+// =========================================================
+class Enemy {
+    constructor(type, x, y) {
+        this.type = type;
+        this.x = x;
+        this.y = y;
+        this.vx = 0;
+        this.vy = 0;
+        this.radius = type.radius;
+        this.speed = type.speed;
+        this.hp = type.hp;
+        this.maxHp = type.hp;
+        this.damage = type.damage;
+        this.xpValue = type.xpValue;
+        this.color = type.color;
+        this.behavior = type.behavior;
+        this.attackCooldown = 0;
+        this.wanderAngle = Math.random() * Math.PI * 2;
+        this.timeAlive = 0;
+    }
+    update(dt) {
+        this.timeAlive += dt;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+
+        if (this.behavior === "charger") {
+            if (dist > 260) {
+                this.vx += dirX * this.speed * 0.6 * dt / 16.67;
+                this.vy += dirY * this.speed * 0.6 * dt / 16.67;
+            } else {
+                this.vx += dirX * this.speed * 1.8 * dt / 16.67;
+                this.vy += dirY * this.speed * 1.8 * dt / 16.67;
+            }
+        } else if (this.behavior === "orbiter") {
+            const orbitSpeed = this.speed * 0.9;
+            const angle = Math.atan2(dy, dx) + Math.PI / 2;
+            const orbitX = Math.cos(angle) * orbitSpeed;
+            const orbitY = Math.sin(angle) * orbitSpeed;
+            this.vx += (dirX * this.speed * 0.6 + orbitX) * dt / 16.67;
+            this.vy += (dirY * this.speed * 0.6 + orbitY) * dt / 16.67;
+        } else if (this.behavior === "ranged") {
+            const desiredDist = 360;
+            if (dist > desiredDist + 40) {
+                this.vx += dirX * this.speed * 0.7 * dt / 16.67;
+                this.vy += dirY * this.speed * 0.7 * dt / 16.67;
+            } else if (dist < desiredDist - 40) {
+                this.vx -= dirX * this.speed * 0.7 * dt / 16.67;
+                this.vy -= dirY * this.speed * 0.7 * dt / 16.67;
+            } else {
+                this.vx *= 0.96;
+                this.vy *= 0.96;
+            }
+            this.attackCooldown -= dt;
+            if (this.attackCooldown <= 0 && dist < 520) {
+                this.attackCooldown = 1600 + Math.random() * 600;
+                const angle = Math.atan2(dy, dx);
+                const speed = 4.2;
+                enemyProjectiles.push(new EnemyProjectile(this.x, this.y, Math.cos(angle) * speed, Math.sin(angle) * speed, 6, this.damage * 0.7));
+            }
+        } else {
+            this.vx += dirX * this.speed * dt / 16.67;
+            this.vy += dirY * this.speed * dt / 16.67;
+        }
+
+        const maxVel = this.speed * 1.4;
+        const vLen = Math.hypot(this.vx, this.vy);
+        if (vLen > maxVel) {
+            this.vx = this.vx / vLen * maxVel;
+            this.vy = this.vy / vLen * maxVel;
+        }
+
+        this.x += this.vx * dt / 16.67;
+        this.y += this.vy * dt / 16.67;
+
+        this.x = clamp(this.x, this.radius + 10, arena.width - this.radius - 10);
+        this.y = clamp(this.y, this.radius + 10, arena.height - this.radius - 10);
+    }
+    draw() {
+        ctx.save();
+        const t = this.timeAlive * 0.005;
+        const pulse = 0.2 + Math.sin(t * 4) * 0.1;
+        const gradient = ctx.createRadialGradient(this.x, this.y, this.radius * 0.2, this.x, this.y, this.radius * 1.4);
+        gradient.addColorStop(0, this.color);
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.globalAlpha = 0.7 + pulse;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (this.hp < this.maxHp) {
+            const w = this.radius * 2;
+            const h = 4;
+            const x = this.x - w / 2;
+            const y = this.y - this.radius - 8;
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(x, y, w, h);
+            const ratio = this.hp / this.maxHp;
+            ctx.fillStyle = "#ff5252";
+            ctx.fillRect(x, y, w * ratio, h);
+        }
+        ctx.restore();
+    }
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.hp = 0;
+            this.onDeath();
+        } else {
+            spawnBurst(this.x, this.y, 4, "rgba(255,255,255,0.5)", 2, 4, 0.4, 1.2, 200, 500);
+        }
+    }
+    onDeath() {
+        kills++;
+        player.gainXP(this.xpValue);
+        spawnBurst(this.x, this.y, 10, this.color.replace("1)", "0.9)").replace("0.9", "0.9"), 3, 7, 0.8, 2.4, 300, 800);
+        camera.shake(120, 5);
+        const orbs = randInt(1, 3);
+        for (let i = 0; i < orbs; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = randRange(4, 16);
+            const ox = this.x + Math.cos(angle) * dist;
+            const oy = this.y + Math.sin(angle) * dist;
+            xpOrbs.push(new XPOrb(ox, oy, this.xpValue / orbs));
+        }
+        const idx = enemies.indexOf(this);
+        if (idx >= 0) enemies.splice(idx, 1);
+    }
+}
+const enemies = [];
+
+const enemyTypes = {
+    grunt: {
+        radius: 16,
+        speed: 1.6,
+        hp: 40,
+        damage: 8,
+        xpValue: 10,
+        color: "rgba(255,120,120,1)",
+        behavior: "chaser"
+    },
+    brute: {
+        radius: 24,
+        speed: 1.1,
+        hp: 120,
+        damage: 18,
+        xpValue: 25,
+        color: "rgba(255,80,80,1)",
+        behavior: "charger"
+    },
+    orbiter: {
+        radius: 18,
+        speed: 1.7,
+        hp: 60,
+        damage: 10,
+        xpValue: 16,
+        color: "rgba(180,120,255,1)",
+        behavior: "orbiter"
+    },
+    ranged: {
+        radius: 18,
+        speed: 1.3,
+        hp: 70,
+        damage: 14,
+        xpValue: 20,
+        color: "rgba(120,220,255,1)",
+        behavior: "ranged"
+    }
+};
+
+// =========================================================
+// ENEMY PROJECTILES
+// =========================================================
+class EnemyProjectile {
+    constructor(x, y, vx, vy, radius, damage) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.radius = radius;
+        this.damage = damage;
+        this.life = 4000;
+    }
+    update(dt) {
+        this.life -= dt;
+        this.x += this.vx * dt / 16.67;
+        this.y += this.vy * dt / 16.67;
+    }
+    draw() {
+        ctx.save();
+        ctx.fillStyle = "rgba(120,220,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const enemyProjectiles = [];
+
+// =========================================================
+// XP ORBS
+// =========================================================
+class XPOrb {
+    constructor(x, y, value) {
+        this.x = x;
+        this.y = y;
+        this.value = value;
+        this.radius = 6;
+        this.vx = randRange(-0.4, 0.4);
+        this.vy = randRange(-0.4, 0.4);
+        this.time = 0;
+    }
+    update(dt) {
+        this.time += dt;
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        const magnet = player.magnetRadius;
+        if (dist < magnet) {
+            const strength = (1 - dist / magnet) * 0.08;
+            this.vx += dx * strength * dt / 16.67;
+            this.vy += dy * strength * dt / 16.67;
+        }
+        this.vx *= 0.96;
+        this.vy *= 0.96;
+        this.x += this.vx * dt / 16.67;
+        this.y += this.vy * dt / 16.67;
+    }
+    draw() {
+        ctx.save();
+        const t = this.time * 0.005;
+        const pulse = 0.4 + Math.sin(t * 4) * 0.2;
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = "rgba(120,220,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius * (0.9 + pulse * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+}
+const xpOrbs = [];
+
+// =========================================================
+// UPGRADE SYSTEM
+// =========================================================
+const upgradePanel = document.getElementById("upgradePanel");
+const upgradeOptionsContainer = document.getElementById("upgradeOptions");
+const upgradeTitle = document.getElementById("upgradeTitle");
+const upgradeSubtitle = document.getElementById("upgradeSubtitle");
+
+const allUpgrades = [
+    {
+        id: "firerate1",
+        name: "Rapid Focus",
+        tier: "I",
+        description: "Fire rate increased by 20%.",
+        hint: "More bullets means more chances to hit and crit.",
+        apply() {
+            player.fireRate *= 0.8;
+        }
+    },
+    {
+        id: "firerate2",
+        name: "Rapid Focus+",
+        tier: "II",
+        description: "Fire rate increased by 25%.",
+        hint: "Stacks with other fire rate upgrades.",
+        apply() {
+            player.fireRate *= 0.75;
+        }
+    },
+    {
+        id: "firerate3",
+        name: "Bullet Storm",
+        tier: "III",
+        description: "Fire rate increased by 35%.",
+        hint: "Turns your weapon into a near-constant stream.",
+        apply() {
+            player.fireRate *= 0.65;
+        }
+    },
+    {
+        id: "damage1",
+        name: "Sharpened Rounds",
+        tier: "I",
+        description: "Bullet damage increased by 25%.",
+        hint: "Great early scaling for all builds.",
+        apply() {
+            player.bulletDamage *= 1.25;
+        }
+    },
+    {
+        id: "damage2",
+        name: "Piercing Impact",
+        tier: "II",
+        description: "Bullet damage increased by 30%.",
+        hint: "Pairs well with multi-shot upgrades.",
+        apply() {
+            player.bulletDamage *= 1.3;
+        }
+    },
+    {
+        id: "damage3",
+        name: "Cataclysmic Rounds",
+        tier: "III",
+        description: "Bullet damage increased by 40%.",
+        hint: "High damage per hit for elite enemies.",
+        apply() {
+            player.bulletDamage *= 1.4;
+        }
+    },
+    {
+        id: "multishot1",
+        name: "Twin Shot",
+        tier: "I",
+        description: "Fire +1 projectile per shot.",
+        hint: "Slight spread, but more coverage.",
+        apply() {
+            player.projectilesPerShot += 1;
+            player.spread += 0.02;
+        }
+    },
+    {
+        id: "multishot2",
+        name: "Triple Volley",
+        tier: "II",
+        description: "Fire +2 projectiles per shot.",
+        hint: "Great with damage and crit upgrades.",
+        apply() {
+            player.projectilesPerShot += 2;
+            player.spread += 0.03;
+        }
+    },
+    {
+        id: "multishot3",
+        name: "Fan of Blades",
+        tier: "III",
+        description: "Fire +3 projectiles per shot.",
+        hint: "Massive coverage, but watch your accuracy.",
+        apply() {
+            player.projectilesPerShot += 3;
+            player.spread += 0.04;
+        }
+    },
+    {
+        id: "speed1",
+        name: "Fleetfoot",
+        tier: "I",
+        description: "Movement speed increased by 15%.",
+        hint: "Helps dodging and repositioning.",
+        apply() {
+            player.speed *= 1.15;
+        }
+    },
+    {
+        id: "speed2",
+        name: "Phase Stride",
+        tier: "II",
+        description: "Movement speed increased by 20%.",
+        hint: "Kiting enemies becomes easier.",
+        apply() {
+            player.speed *= 1.2;
+        }
+    },
+    {
+        id: "speed3",
+        name: "Blinkstep",
+        tier: "III",
+        description: "Movement speed increased by 25%.",
+        hint: "Stay ahead of even the fastest foes.",
+        apply() {
+            player.speed *= 1.25;
+        }
+    },
+    {
+        id: "hp1",
+        name: "Vital Core",
+        tier: "I",
+        description: "Max HP increased by 20. Heal 20 HP.",
+        hint: "More room for mistakes.",
+        apply() {
+            player.maxHp += 20;
+            player.hp = Math.min(player.maxHp, player.hp + 20);
+        }
+    },
+    {
+        id: "hp2",
+        name: "Reinforced Shell",
+        tier: "II",
+        description: "Max HP increased by 30. Heal 30 HP.",
+        hint: "Pairs well with regeneration.",
+        apply() {
+            player.maxHp += 30;
+            player.hp = Math.min(player.maxHp, player.hp + 30);
+        }
+    },
+    {
+        id: "regen1",
+        name: "Slow Regeneration",
+        tier: "I",
+        description: "Regenerate 1 HP per second after not taking damage for 4s.",
+        hint: "Sustain for long fights.",
+        apply() {
+            player.regenRate += 1;
+        }
+    },
+    {
+        id: "regen2",
+        name: "Accelerated Regeneration",
+        tier: "II",
+        description: "Regenerate an additional 1.5 HP per second.",
+        hint: "Stack with other regen upgrades.",
+        apply() {
+            player.regenRate += 1.5;
+        }
+    },
+    {
+        id: "magnet1",
+        name: "Magnetic Field",
+        tier: "I",
+        description: "XP pickup radius increased by 40%.",
+        hint: "Level faster without chasing every orb.",
+        apply() {
+            player.magnetRadius *= 1.4;
+        }
+    },
+    {
+        id: "magnet2",
+        name: "Gravitic Well",
+        tier: "II",
+        description: "XP pickup radius increased by 50%.",
+        hint: "XP orbs fly to you from afar.",
+        apply() {
+            player.magnetRadius *= 1.5;
+        }
+    },
+    {
+        id: "pierce1",
+        name: "Penetrating Shots",
+        tier: "I",
+        description: "Bullets pierce 1 additional enemy.",
+        hint: "Great against clustered foes.",
+        apply() {
+            player.pierce += 1;
+        }
+    },
+    {
+        id: "pierce2",
+        name: "Shattering Rounds",
+        tier: "II",
+        description: "Bullets pierce 2 additional enemies.",
+        hint: "Synergizes with multi-shot.",
+        apply() {
+            player.pierce += 2;
+        }
+    },
+    {
+        id: "crit1",
+        name: "Critical Instinct",
+        tier: "I",
+        description: "Crit chance increased by 6%.",
+        hint: "Crits deal double damage.",
+        apply() {
+            player.critChance += 0.06;
+        }
+    },
+    {
+        id: "crit2",
+        name: "Lethal Precision",
+        tier: "II",
+        description: "Crit chance increased by 8%.",
+        hint: "More frequent high-damage hits.",
+        apply() {
+            player.critChance += 0.08;
+        }
+    },
+    {
+        id: "crit3",
+        name: "Overwhelming Force",
+        tier: "III",
+        description: "Crit multiplier increased to 2.6x.",
+        hint: "Crits become devastating.",
+        apply() {
+            player.critMultiplier = 2.6;
+        }
+    },
+    {
+        id: "bulletSize1",
+        name: "Heavy Rounds",
+        tier: "I",
+        description: "Bullet size increased by 20%.",
+        hint: "Easier to hit fast enemies.",
+        apply() {
+            player.bulletSize *= 1.2;
+        }
+    },
+    {
+        id: "bulletSpeed1",
+        name: "Accelerated Payload",
+        tier: "I",
+        description: "Bullet speed increased by 25%.",
+        hint: "Improves effective range and accuracy.",
+        apply() {
+            player.bulletSpeed *= 1.25;
+        }
+    },
+    {
+        id: "special1",
+        name: "Kinetic Barrier",
+        tier: "I",
+        description: "Taking damage releases a shockwave that knocks back nearby enemies.",
+        hint: "Helps when surrounded.",
+        apply() {
+            player.onHitShockwave = true;
+        }
+    },
+    {
+        id: "special2",
+        name: "Temporal Slip",
+        tier: "II",
+        description: "Briefly slow time when your HP drops below 30%. (once per wave)",
+        hint: "Gives you a chance to recover.",
+        apply() {
+            player.temporalSlip = true;
+            player.temporalSlipUsed = false;
+        }
+    }
+];
+
+let availableUpgrades = [...allUpgrades];
+
+function openUpgradePanel() {
+    if (gameState === GAME_STATE.GAME_OVER) return;
+    gameState = GAME_STATE.LEVEL_UP;
+    upgradePanel.style.display = "block";
+    upgradeOptionsContainer.innerHTML = "";
+    upgradeTitle.textContent = "Choose an upgrade";
+    upgradeSubtitle.textContent = "Your power grows. Select one of the offered enhancements.";
+
+    const choices = [];
+    const pool = availableUpgrades.length > 0 ? availableUpgrades : allUpgrades;
+    while (choices.length < 3 && pool.length > 0) {
+        const upg = randomChoice(pool);
+        if (!choices.includes(upg)) choices.push(upg);
+    }
+
+    choices.forEach(upg => {
+        const card = document.createElement("div");
+        card.className = "upgradeCard";
+        const name = document.createElement("div");
+        name.className = "upgradeName";
+        name.textContent = upg.name;
+        const tier = document.createElement("div");
+        tier.className = "upgradeTier";
+        tier.textContent = "Tier " + upg.tier;
+        const desc = document.createElement("div");
+        desc.className = "upgradeDesc";
+        desc.textContent = upg.description;
+        const hint = document.createElement("div");
+        hint.className = "upgradeHint";
+        hint.textContent = upg.hint;
+        card.appendChild(name);
+        card.appendChild(tier);
+        card.appendChild(desc);
+        card.appendChild(hint);
+        card.addEventListener("click", () => {
+            upg.apply();
+            const idx = availableUpgrades.indexOf(upg);
+            if (idx >= 0) availableUpgrades.splice(idx, 1);
+            closeUpgradePanel();
+        });
+        upgradeOptionsContainer.appendChild(card);
+    });
+}
+function closeUpgradePanel() {
+    upgradePanel.style.display = "none";
+    if (gameState !== GAME_STATE.GAME_OVER) {
+        gameState = GAME_STATE.RUNNING;
+    }
+}
+
+// =========================================================
+// UI ELEMENTS
+// =========================================================
+const timeLabel = document.getElementById("timeLabel");
+const levelLabel = document.getElementById("levelLabel");
+const killsLabel = document.getElementById("killsLabel");
+const waveLabel = document.getElementById("waveLabel");
+const hpBarFill = document.getElementById("hpBarFill");
+const xpBarFill = document.getElementById("xpBarFill");
+const centerMessage = document.getElementById("centerMessage");
+const pauseOverlay = document.getElementById("pauseOverlay");
+
+function updateUI() {
+    const seconds = Math.floor(elapsedTime / 1000);
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    timeLabel.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+    levelLabel.textContent = player.level.toString();
+    killsLabel.textContent = kills.toString();
+    waveLabel.textContent = waveNumber.toString();
+
+    const hpRatio = clamp(player.hp / player.maxHp, 0, 1);
+    hpBarFill.style.width = (hpRatio * 100).toFixed(1) + "%";
+
+    const xpRatio = clamp(player.xp / player.xpToNext, 0, 1);
+    xpBarFill.style.width = (xpRatio * 100).toFixed(1) + "%";
+}
+
+// =========================================================
+// WAVES / SPAWNING
+// =========================================================
+function spawnWave() {
+    const baseCount = 8 + waveNumber * 2;
+    const spawnRadius = Math.max(canvas.width, canvas.height) * 0.8;
+    for (let i = 0; i < baseCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = spawnRadius + Math.random() * 200;
+        const x = player.x + Math.cos(angle) * dist;
+        const y = player.y + Math.sin(angle) * dist;
+        const typeRoll = Math.random();
+        let type;
+        if (typeRoll < 0.55) type = enemyTypes.grunt;
+        else if (typeRoll < 0.75) type = enemyTypes.orbiter;
+        else if (typeRoll < 0.9) type = enemyTypes.ranged;
+        else type = enemyTypes.brute;
+        enemies.push(new Enemy(type, clamp(x, 40, arena.width - 40), clamp(y, 40, arena.height - 40)));
+    }
+}
+function updateWaves(dt) {
+    waveTimer += dt;
+    const waveDuration = 20000;
+    if (waveTimer > waveDuration) {
+        waveTimer = 0;
+        waveNumber++;
+        spawnWave();
+    }
+}
+
+// =========================================================
+// GAME FLOW
+// =========================================================
+function startGame() {
+    gameState = GAME_STATE.RUNNING;
+    centerMessage.style.display = "none";
+    elapsedTime = 0;
+    waveNumber = 1;
+    waveTimer = 0;
+    kills = 0;
+    enemies.length = 0;
+    projectiles.length = 0;
+    enemyProjectiles.length = 0;
+    xpOrbs.length = 0;
+    particles.length = 0;
+
+    player.x = arena.width / 2;
+    player.y = arena.height / 2;
+    player.hp = player.maxHp = 100;
+    player.level = 1;
+    player.xp = 0;
+    player.xpToNext = 60;
+    player.speed = player.baseSpeed;
+    player.fireRate = 260;
+    player.bulletDamage = 12;
+    player.bulletSpeed = 9;
+    player.bulletSize = 6;
+    player.projectilesPerShot = 1;
+    player.spread = 0.06;
+    player.pierce = 0;
+    player.critChance = 0.08;
+    player.critMultiplier = 2.0;
+    player.regenRate = 0;
+    player.magnetRadius = 140;
+    player.invincibleTime = 0;
+    player.timeSinceHit = 0;
+    player.onHitShockwave = false;
+    player.temporalSlip = false;
+    player.temporalSlipUsed = false;
+
+    availableUpgrades = [...allUpgrades];
+    spawnWave();
+}
+function onPlayerDeath() {
+    gameState = GAME_STATE.GAME_OVER;
+    centerMessage.style.display = "block";
+    centerMessage.innerHTML = `
+        <h1>DEFEATED</h1>
+        <p>You survived for ${timeLabel.textContent}, reached level ${player.level}, and defeated ${kills} enemies.</p>
+        <p>Press SPACE to try again.</p>
+        <p class="hint">Experiment with different upgrade combinations to push further.</p>
+    `;
+    upgradePanel.style.display = "none";
+    pauseOverlay.style.display = "none";
+}
+function togglePause() {
+    if (gameState === GAME_STATE.RUNNING) {
+        gameState = GAME_STATE.PAUSED;
+        pauseOverlay.style.display = "flex";
+    } else if (gameState === GAME_STATE.PAUSED) {
+        gameState = GAME_STATE.RUNNING;
+        pauseOverlay.style.display = "none";
+    }
+}
+
+// =========================================================
+// MAIN LOOP
+// =========================================================
+function gameLoop(timestamp) {
+    const dt = lastTimestamp ? timestamp - lastTimestamp : 16.67;
+    lastTimestamp = timestamp;
+
+    if (gameState === GAME_STATE.RUNNING) {
+        elapsedTime += dt;
+    }
+
+    camera.x = player.x - canvas.width / 2;
+    camera.y = player.y - canvas.height / 2;
+    camera.x = clamp(camera.x, 0, arena.width - canvas.width);
+    camera.y = clamp(camera.y, 0, arena.height - canvas.height);
+    camera.update(dt);
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    camera.apply();
+
+    arena.drawBackground();
+    arena.drawGridOverlay();
+
+    if (gameState === GAME_STATE.RUNNING) {
+        player.update(dt);
+        updateWaves(dt);
+    }
+
+    xpOrbs.forEach((orb, i) => {
+        if (gameState === GAME_STATE.RUNNING) orb.update(dt);
+        orb.draw();
+        const d2 = distSq(orb.x, orb.y, player.x, player.y);
+        const r = player.radius + orb.radius + 4;
+        if (d2 < r * r) {
+            player.gainXP(orb.value);
+            spawnBurst(orb.x, orb.y, 4, "rgba(120,220,255,0.9)", 2, 4, 0.4, 1.2, 200, 500);
+            xpOrbs.splice(i, 1);
+        }
+    });
+
+    enemies.forEach(enemy => {
+        if (gameState === GAME_STATE.RUNNING) enemy.update(dt);
+        enemy.draw();
+    });
+
+    projectiles.forEach((p, i) => {
+        if (gameState === GAME_STATE.RUNNING) p.update(dt);
+        p.draw();
+        if (p.life <= 0 ||
+            p.x < -50 || p.x > arena.width + 50 ||
+            p.y < -50 || p.y > arena.height + 50) {
+            projectiles.splice(i, 1);
+            return;
+        }
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            const r = p.radius + e.radius;
+            if (distSq(p.x, p.y, e.x, e.y) < r * r) {
+                e.takeDamage(p.damage);
+                spawnBurst(p.x, p.y, 3, "rgba(255,255,255,0.7)", 2, 4, 0.4, 1.2, 150, 400);
+                if (p.pierce > 0) {
+                    p.pierce--;
+                } else {
+                    projectiles.splice(i, 1);
+                }
+                break;
+            }
+        }
+    });
+
+    enemyProjectiles.forEach((p, i) => {
+        if (gameState === GAME_STATE.RUNNING) p.update(dt);
+        p.draw();
+        if (p.life <= 0) {
+            enemyProjectiles.splice(i, 1);
+            return;
+        }
+        const r = p.radius + player.radius;
+        if (distSq(p.x, p.y, player.x, player.y) < r * r) {
+            enemyProjectiles.splice(i, 1);
+            player.takeDamage(p.damage);
+        }
+    });
+
+    if (gameState === GAME_STATE.RUNNING) {
+        enemies.forEach(e => {
+            const r = e.radius + player.radius;
+            if (distSq(e.x, e.y, player.x, player.y) < r * r) {
+                player.takeDamage(e.damage * dt / 400);
+            }
+        });
+    }
+
+    particles.forEach((pt, i) => {
+        if (gameState === GAME_STATE.RUNNING || gameState === GAME_STATE.LEVEL_UP || gameState === GAME_STATE.PAUSED) {
+            pt.update(dt);
+        }
+        pt.draw();
+        if (pt.life <= 0) particles.splice(i, 1);
+    });
+
+    player.draw();
+
+    ctx.restore();
+
+    updateUI();
+
+    requestAnimationFrame(gameLoop);
+}
+requestAnimationFrame(gameLoop);
+
+// =========================================================
+// INPUT HANDLERS FOR FLOW
+// =========================================================
+window.addEventListener("keydown", e => {
+    if (e.code === "Space") {
+        if (gameState === GAME_STATE.NOT_STARTED || gameState === GAME_STATE.GAME_OVER) {
+            startGame();
+        }
+    }
+    if (e.code === "Escape") {
+        if (gameState === GAME_STATE.RUNNING || gameState === GAME_STATE.PAUSED) {
+            togglePause();
+        }
+    }
+});
+</script>
+</body>
+</html>
