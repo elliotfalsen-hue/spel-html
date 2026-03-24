@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Binding of Isaac Roguelike</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #1a1a2e; color: #fff; font-family: Arial, sans-serif; overflow: hidden; user-select: none; }
+        #gameContainer { display: flex; height: 100vh; }
+        #gameCanvas { flex: 1; background: #0f0f0f; border-right: 3px solid #e94560; cursor: crosshair; }
+        #hud { width: 300px; background: #0f3460; padding: 15px; overflow-y: auto; border-left: 3px solid #e94560; }
+        .hudSection { padding: 12px; border: 2px solid #e94560; background: #1a1a2e; margin: 10px 0; border-radius: 4px; }
+        .hudTitle { color: #e94560; font-weight: bold; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; border-bottom: 1px solid #e94560; padding-bottom: 5px; }
+        .hudItem { font-size: 11px; margin: 4px 0; color: #00ff00; }
+        .stat { color: #ffff00; }
+        .healthBar { width: 100%; height: 18px; background: #000; border: 2px solid #ff0000; margin: 5px 0; border-radius: 2px; overflow: hidden; }
+        .healthFill { height: 100%; background: #00ff00; transition: width 0.1s; }
+        .itemGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin: 5px 0; }
+        .itemSlot { aspect-ratio: 1; background: #0f3460; border: 2px solid #e94560; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+        .itemSlot.empty { opacity: 0.5; }
+        button { background: #e94560; color: #fff; border: 2px solid #e94560; padding: 8px 12px; font-size: 11px; font-weight: bold; cursor: pointer; width: 100%; margin: 5px 0; border-radius: 2px; }
+        button:hover { background: #ff6b6b; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+        <div class="hudSection">
+            <div class="hudTitle">GAME</div>
+            <div class="hudItem">Floor: <span id="floor">1</span></div>
+            <div class="hudItem">Room: <span id="room">1/10</span></div>
+            <div class="hudItem stat">Level: <span id="level">1</span></div>
+            <div class="hudItem">XP: <span id="exp">0/100</span></div>
+        </div>
+        <div class="hudSection">
+            <div class="hudTitle">HEALTH</div>
+            <div class="healthBar"><div class="healthFill" id="healthBar"></div></div>
+            <div class="hudItem stat" id="healthText">10/10</div>
+        </div>
+        <div class="hudSection">
+            <div class="hudTitle">STATS</div>
+            <div class="hudItem">Damage: <span id="damage">1.0</span></div>
+            <div class="hudItem">Speed: <span id="speed">1.0</span></div>
+            <div class="hudItem">Fire: <span id="fire">1.0</span></div>
+            <div class="hudItem">Range: <span id="range">100</span></div>
+            <div class="hudItem">Luck: <span id="luck">0</span></div>
+        </div>
+        <div class="hudSection">
+            <div class="hudTitle">RESOURCES</div>
+            <div class="hudItem">Gold: <span id="gold">0</span></div>
+            <div class="hudItem">Bombs: <span id="bombs">0</span></div>
+            <div class="hudItem">Score: <span id="score">0</span></div>
+        </div>
+        <div class="hudSection">
+            <div class="hudTitle">ACTIVE</div>
+            <div id="activeSlot" style="font-size: 24px; text-align: center;">—</div>
+        </div>
+        <div class="hudSection">
+            <div class="hudTitle">INVENTORY</div>
+            <div class="itemGrid" id="inventory"></div>
+        </div>
+        <button onclick="togglePause()">PAUSE</button>
+        <button onclick="restartGame()">RESTART</button>
+    </div>
+</div>
+
+<script>
+// SETUP
+const SCREEN_WIDTH = 960, SCREEN_HEIGHT = 720;
+const TILE = 30, COLS = 13, ROWS = 12;
+const MAP_W = COLS * TILE, MAP_H = ROWS * TILE;
+const PLAYER_R = 12;
+
+let canvas, ctx;
+let gameState = { floor: 1, room: 1, paused: false, gameOver: false, won: false };
+let player = {
+    x: MAP_W/2, y: MAP_H/2, vx: 0, vy: 0, r: PLAYER_R,
+    maxHp: 10, hp: 10, dmg: 1, fireRate: 30, range: 100, spd: 1, luck: 0,
+    gold: 0, bombs: 0, level: 1, xp: 0, xpNext: 100, score: 0, inv: [], active: null, invul: 0
+};
+let enemies = [], obstacles = [], pickups = [], particles = [], tears = [];
+let rooms = [], curRoom = 0;
+let keys = {};
+
+// ITEMS
+const ITEMS = {
+    'tears': {n:'Tears', t:'p', s:'fireRate', v:-5, e:'💧'},
+    'damage': {n:'D6', t:'p', s:'damage', v:0.5, e:'🎲'},
+    'speed': {n:'Speed', t:'p', s:'speed', v:0.5, e:'⚡'},
+    'range': {n:'Range', t:'p', s:'range', v:30, e:'🎯'},
+    'health': {n:'Heart', t:'p', s:'health', v:2, e:'❤️'},
+    'luck': {n:'Clover', t:'p', s:'luck', v:1, e:'🍀'},
+    'bombs': {n:'Bombs', t:'p', s:'bombs', v:5, e:'💣'},
+    'bomb_box': {n:'Bomb Box', t:'a', e:'📦'},
+};
+
+const ENEMIES = {
+    'goblin': {hp:5, spd:1.2, dmg:1, sz:10, xp:15, e:'👹'},
+    'fly': {hp:3, spd:1.8, dmg:0.5, sz:8, xp:10, e:'🪰'},
+    'spider': {hp:8, spd:1, dmg:1.5, sz:12, xp:20, e:'🕷️'},
+    'demon': {hp:12, spd:1.5, dmg:2, sz:14, xp:30, e:'👿'},
+    'pooter': {hp:6, spd:0.8, dmg:1, sz:11, xp:15, e:'💨'},
+};
+
+const BOSSES = {
+    'monstro': {hp:100, spd:0.8, dmg:2, sz:35, e:'🦖'},
+    'mom': {hp:120, spd:0.6, dmg:2.5, sz:40, e:'👩'},
+    'blue_baby': {hp:80, spd:1.2, dmg:1.5, sz:32, e:'👶'},
+};
+
+function init() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    canvas.width = SCREEN_WIDTH;
+    canvas.height = SCREEN_HEIGHT;
+    
+    document.addEventListener('keydown', e => {
+        keys[e.key.toLowerCase()] = true;
+        if (e.key === 'Escape') togglePause();
+        if (e.key === ' ') nextRoom();
+    });
+    document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+    canvas.addEventListener('click', e => {
+        if (gameState.paused || gameState.gameOver || gameState.won) return;
+        const r = canvas.getBoundingClientRect();
+        const x = e.clientX - r.left, y = e.clientY - r.top;
+        fireTear(x, y);
+    });
+    
+    genFloor();
+    loadRoom(0);
+    gameLoop();
+}
+
+function genFloor() {
+    rooms = [];
+    for (let i = 0; i < 10; i++) {
+        rooms.push({
+            t: i === 9 ? 'boss' : (Math.random() < 0.2 ? 'treasure' : 'normal'),
+            cleared: false, visited: false
+        });
+    }
+}
+
+function loadRoom(i) {
+    curRoom = i;
+    gameState.room = i + 1;
+    rooms[i].visited = true;
+    
+    enemies = [];
+    obstacles = [];
+    pickups = [];
+    tears = [];
+    particles = [];
+    player.x = MAP_W/2;
+    player.y = MAP_H/2;
+    
+    // Generate obstacles
+    for (let j = 0; j < 5 + Math.random() * 5; j++) {
+        let x, y, ok = true;
+        do {
+            x = 40 + Math.random() * (MAP_W - 80);
+            y = 40 + Math.random() * (MAP_H - 80);
+            ok = Math.hypot(x - player.x, y - player.y) > 100;
+        } while (!ok);
+        obstacles.push({x, y, w: 25 + Math.random() * 35, h: 25 + Math.random() * 35, hp: 2, maxHp: 2});
+    }
+    
+    // Generate room content
+    const room = rooms[i];
+    if (room.t === 'boss') {
+        const bossKeys = Object.keys(BOSSES);
+        const bossKey = bossKeys[Math.floor(Math.random() * bossKeys.length)];
+        const bossData = BOSSES[bossKey];
+        enemies.push({
+            x: MAP_W/2, y: MAP_H/2, vx: 0, vy: 0,
+            type: bossKey, hp: bossData.hp, maxHp: bossData.hp,
+            data: bossData, isBoss: true, shoot: 0
+        });
+    } else if (room.t === 'treasure') {
+        for (let j = 0; j < 3; j++) {
+            const itemKeys = Object.keys(ITEMS);
+            const itemKey = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+            pickups.push({x: 150 + j * 280, y: 250, t:'item', item: itemKey, vx:0, vy:0, lifetime:600, float:0});
+        }
+        const enemyKeys = Object.keys(ENEMIES);
+        spawnEnemy(enemyKeys[Math.floor(Math.random() * enemyKeys.length)]);
+    } else {
+        const cnt = 3 + gameState.floor + Math.random() * 3;
+        for (let j = 0; j < cnt; j++) {
+            const enemyKeys = Object.keys(ENEMIES);
+            spawnEnemy(enemyKeys[Math.floor(Math.random() * enemyKeys.length)]);
+        }
+    }
+    
+    updateHUD();
+}
+
+function spawnEnemy(type) {
+    const data = ENEMIES[type];
+    let x, y, ok = true;
+    do {
+        x = 50 + Math.random() * (MAP_W - 100);
+        y = 50 + Math.random() * (MAP_H - 100);
+        ok = Math.hypot(x - player.x, y - player.y) > 150;
+    } while (!ok);
+    
+    enemies.push({
+        x, y, vx: 0, vy: 0, type,
+        hp: data.hp, maxHp: data.hp,
+        data, shoot: 0, isBoss: false
+    });
+}
+
+function update() {
+    if (gameState.paused || gameState.gameOver || gameState.won) return;
+    
+    // Player movement
+    let mx = 0, my = 0;
+    if (keys['w'] || keys['arrowup']) my -= 1;
+    if (keys['s'] || keys['arrowdown']) my += 1;
+    if (keys['a'] || keys['arrowleft']) mx -= 1;
+    if (keys['d'] || keys['arrowright']) mx += 1;
+    
+    if (mx !== 0 || my !== 0) {
+        const len = Math.hypot(mx, my);
+        player.vx = (mx / len) * player.spd;
+        player.vy = (my / len) * player.spd;
+    }
+    
+    player.x += player.vx;
+    player.y += player.vy;
+    player.x = Math.max(player.r, Math.min(MAP_W - player.r, player.x));
+    player.y = Math.max(player.r, Math.min(MAP_H - player.r, player.y));
+    
+    // Obstacle collision
+    obstacles.forEach(obs => {
+        if (circleRectCollide(player.x, player.y, player.r, obs.x, obs.y, obs.w, obs.h)) {
+            player.x -= player.vx;
+            player.y -= player.vy;
+        }
+    });
+    
+    if (player.invul > 0) player.invul--;
+    
+    // Tears
+    tears = tears.filter(t => {
+        t.x += t.vx;
+        t.y += t.vy;
+        t.lifetime--;
+        
+        if (t.x < 0 || t.x > MAP_W || t.y < 0 || t.y > MAP_H) return false;
+        
+        let hit = false;
+        enemies.forEach(e => {
+            if (Math.hypot(t.x - e.x, t.y - e.y) < e.data.sz / 2 + 4) {
+                e.hp -= player.dmg;
+                makeParticles(t.x, t.y, 5, '#00aaff');
+                hit = true;
+            }
+        });
+        
+        obstacles.forEach(o => {
+            if (circleRectCollide(t.x, t.y, 4, o.x, o.y, o.w, o.h)) {
+                o.hp--;
+                hit = true;
+            }
+        });
+        
+        return t.lifetime > 0 && !hit;
+    });
+    
+    // Enemies
+    enemies = enemies.filter(e => {
+        if (e.hp <= 0) {
+            makeParticles(e.x, e.y, 15, '#ff6b6b');
+            player.xp += e.data.xp;
+            player.gold += Math.floor(e.data.xp * 0.4);
+            player.score += e.data.xp;
+            
+            if (Math.random() < 0.2) {
+                const itemKeys = Object.keys(ITEMS);
+                addPickup(e.x, e.y, 'item', itemKeys[Math.floor(Math.random() * itemKeys.length)]);
+            }
+            
+            if (e.isBoss) {
+                gameState.won = true;
+                addPickup(e.x - 40, e.y, 'item', Object.keys(ITEMS)[Math.floor(Math.random() * Object.keys(ITEMS).length)]);
+                addPickup(e.x + 40, e.y, 'item', Object.keys(ITEMS)[Math.floor(Math.random() * Object.keys(ITEMS).length)]);
+                makeParticles(e.x, e.y, 30, '#ffff00');
+            }
+            
+            return false;
+        }
+        
+        const dx = player.x - e.x, dy = player.y - e.y;
+        const dist = Math.hypot(dx, dy);
+        
+        if (dist < 350) {
+            e.vx = (dx / dist) * e.data.spd;
+            e.vy = (dy / dist) * e.data.spd;
+        }
+        
+        e.x += e.vx;
+        e.y += e.vy;
+        e.x = Math.max(e.data.sz/2, Math.min(MAP_W - e.data.sz/2, e.x));
+        e.y = Math.max(e.data.sz/2, Math.min(MAP_H - e.data.sz/2, e.y));
+        
+        e.shoot++;
+        if (e.shoot > 80) {
+            if (Math.hypot(player.x - e.x, player.y - e.y) < 280) {
+                const ang = Math.atan2(player.y - e.y, player.x - e.x);
+                for (let i = -1; i <= 1; i++) {
+                    const a = ang + i * 0.3;
+                    pickups.push({x:e.x, y:e.y, vx:Math.cos(a)*2.5, vy:Math.sin(a)*2.5, t:'proj', lifetime:300, dmg:e.data.dmg});
+                }
+            }
+            e.shoot = 0;
+        }
+        
+        if (player.invul <= 0 && Math.hypot(player.x - e.x, player.y - e.y) < player.r + e.data.sz/2) {
+            player.hp--;
+            player.invul = 120;
+            makeParticles(player.x, player.y, 10, '#ff0000');
+            if (player.hp <= 0) {
+                gameState.gameOver = true;
+            }
+        }
+        
+        return true;
+    });
+    
+    // Pickups
+    pickups = pickups.filter(p => {
+        if (p.t === 'proj') {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.lifetime--;
+            
+            if (p.x < 0 || p.x > MAP_W || p.y < 0 || p.y > MAP_H) return false;
+            
+            if (player.invul <= 0 && Math.hypot(p.x - player.x, p.y - player.y) < player.r + 5) {
+                player.hp -= p.dmg;
+                player.invul = 120;
+                makeParticles(player.x, player.y, 10, '#ff0000');
+                if (player.hp <= 0) gameState.gameOver = true;
+                return false;
+            }
+            return p.lifetime > 0;
+        }
+        
+        if (p.t === 'portal') {
+            if (Math.hypot(p.x - player.x, p.y - player.y) < 30) nextRoom();
+            return true;
+        }
+        
+        const dist = Math.hypot(p.x - player.x, p.y - player.y);
+        if (dist < 40) {
+            if (p.t === 'gold') {
+                player.gold += 5;
+                player.score += 5;
+            } else if (p.t === 'item') {
+                addItemToInventory(p.item);
+            }
+            makeParticles(p.x, p.y, 5, '#ffaa00');
+            return false;
+        }
+        
+        p.float++;
+        p.y += Math.sin(p.float * 0.05) * 0.2;
+        
+        return true;
+    });
+    
+    // Particles
+    particles = particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.95;
+        p.vy *= 0.95;
+        p.lifetime--;
+        return p.lifetime > 0;
+    });
+    
+    // Level up
+    if (player.xp >= player.xpNext) {
+        player.xp -= player.xpNext;
+        player.level++;
+        player.xpNext = Math.floor(player.xpNext * 1.15);
+        player.maxHp += 2;
+        player.hp = player.maxHp;
+        makeParticles(player.x, player.y, 20, '#00ff00');
+    }
+    
+    // Room clear
+    if (enemies.length === 0 && rooms[curRoom].visited && !rooms[curRoom].cleared) {
+        rooms[curRoom].cleared = true;
+        addPickup(MAP_W / 2, MAP_H / 2, 'portal', null);
+    }
+    
+    updateHUD();
+}
+
+function fireTear(sx, sy) {
+    const cx = SCREEN_WIDTH / 2, cy = SCREEN_HEIGHT / 2;
+    const dx = sx - cx, dy = sy - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist === 0) return;
+    
+    const spd = 5.5;
+    tears.push({
+        x: player.x, y: player.y,
+        vx: (dx / dist) * spd,
+        vy: (dy / dist) * spd,
+        damage: 1,
+        lifetime: 300
+    });
+}
+
+function addItemToInventory(itemKey) {
+    const item = ITEMS[itemKey];
+    if (item.t === 'p') applyPassiveItem(itemKey);
+    else player.active = itemKey;
+    if (player.inv.length < 6) player.inv.push(itemKey);
+}
+
+function applyPassiveItem(itemKey) {
+    const item = ITEMS[itemKey];
+    if (item.s === 'damage') player.dmg += item.v;
+    else if (item.s === 'fireRate') player.fireRate = Math.max(5, player.fireRate + item.v);
+    else if (item.s === 'speed') player.spd += item.v;
+    else if (item.s === 'range') player.range += item.v;
+    else if (item.s === 'health') {
+        player.maxHp += item.v;
+        player.hp = player.maxHp;
+    } else if (item.s === 'luck') player.luck += item.v;
+    else if (item.s === 'bombs') player.bombs += item.v;
+}
+
+function addPickup(x, y, t, item) {
+    pickups.push({x, y, t, item, vx:0, vy:0, lifetime:600, float:0});
+}
+
+function draw() {
+    ctx.fillStyle = '#0f0f0f';
+    ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= MAP_W; x += TILE) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, MAP_H);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= MAP_H; y += TILE) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(MAP_W, y);
+        ctx.stroke();
+    }
+    
+    obstacles.forEach(o => {
+        const hpPct = o.hp / o.maxHp;
+        ctx.fillStyle = `rgb(${Math.floor(150 * hpPct)}, ${Math.floor(150 * hpPct)}, 50)`;
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(o.x, o.y, o.w, o.h);
+    });
+    
+    enemies.forEach(e => {
+        ctx.fillStyle = e.isBoss ? '#ff0000' : '#ff6b6b';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.data.sz / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#00ff00';
+        const barW = 45, barH = 5;
+        const hpPct = e.hp / e.maxHp;
+        ctx.fillRect(e.x - barW / 2, e.y - 32, barW * hpPct, barH);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(e.x - barW / 2, e.y - 32, barW, barH);
+        
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(e.data.e, e.x, e.y);
+    });
+    
+    pickups.forEach(p => {
+        if (p.t === 'proj') {
+            ctx.fillStyle = '#ff3333';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+    
+    ctx.fillStyle = '#00aaff';
+    tears.forEach(t => {
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    pickups.forEach(p => {
+        if (p.t === 'item') {
+            const item = ITEMS[p.item];
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(item.e, p.x, p.y);
+        } else if (p.t === 'gold') {
+            ctx.fillStyle = '#ffff00';
+            ctx.fillRect(p.x - 6, p.y - 6, 12, 12);
+        } else if (p.t === 'portal') {
+            ctx.fillStyle = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffff00';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🚪', p.x, p.y);
+        }
+    });
+    
+    particles.forEach(p => {
+        ctx.fillStyle = `rgba(${p.r}, ${p.g}, ${p.b}, ${(p.lifetime / p.maxLifetime) * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
+    if (player.invul % 10 < 5) {
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('👁️', player.x, player.y);
+    }
+    
+    if (gameState.paused) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('PAUSED', SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+    }
+}
+
+function circleRectCollide(cx, cy, cr, rx, ry, rw, rh) {
+    const closestX = Math.max(rx, Math.min(cx, rx + rw));
+    const closestY = Math.max(ry, Math.min(cy, ry + rh));
+    const dist = Math.hypot(cx - closestX, cy - closestY);
+    return dist < cr;
+}
+
+function makeParticles(x, y, cnt, col) {
+    let r, g, b;
+    if (col === '#ff0000') { r = 255; g = 0; b = 0; }
+    else if (col === '#00ff00') { r = 0; g = 255; b = 0; }
+    else if (col === '#ffff00') { r = 255; g = 255; b = 0; }
+    else if (col === '#ff6b6b') { r = 255; g = 107; b = 107; }
+    else if (col === '#00aaff') { r = 0; g = 170; b = 255; }
+    else if (col === '#ffaa00') { r = 255; g = 170; b = 0; }
+    else { r = 255; g = 255; b = 255; }
+    
+    for (let i = 0; i < cnt; i++) {
+        const ang = (Math.PI * 2 * i) / cnt + (Math.random() - 0.5);
+        const spd = 2 + Math.random() * 2.5;
+        particles.push({
+            x, y,
+            vx: Math.cos(ang) * spd,
+            vy: Math.sin(ang) * spd,
+            lifetime: 35,
+            maxLifetime: 35,
+            size: 2 + Math.random() * 3,
+            r, g, b
+        });
+    }
+}
+
+function updateHUD() {
+    document.getElementById('floor').textContent = gameState.floor;
+    document.getElementById('room').textContent = `${gameState.room}/10`;
+    document.getElementById('level').textContent = player.level;
+    document.getElementById('exp').textContent = `${player.xp}/${player.xpNext}`;
+    
+    const hpPct = (player.hp / player.maxHp) * 100;
+    document.getElementById('healthBar').style.width = hpPct + '%';
+    document.getElementById('healthText').textContent = `${Math.max(0, player.hp)}/${player.maxHp}`;
+    
+    document.getElementById('damage').textContent = player.dmg.toFixed(1);
+    document.getElementById('speed').textContent = player.spd.toFixed(1);
+    document.getElementById('fire').textContent = (30 / player.fireRate).toFixed(2);
+    document.getElementById('range').textContent = player.range;
+    document.getElementById('luck').textContent = player.luck;
+    
+    document.getElementById('gold').textContent = player.gold;
+    document.getElementById('bombs').textContent = player.bombs;
+    document.getElementById('score').textContent = player.score;
+    
+    if (player.active) {
+        const item = ITEMS[player.active];
+        document.getElementById('activeSlot').textContent = item.e;
+    }
+    
+    const invDiv = document.getElementById('inventory');
+    invDiv.innerHTML = '';
+    player.inv.forEach(itemKey => {
+        const item = ITEMS[itemKey];
+        const slot = document.createElement('div');
+        slot.className = 'itemSlot';
+        slot.textContent = item.e;
+        slot.title = item.n;
+        invDiv.appendChild(slot);
+    });
+    
+    for (let i = player.inv.length; i < 6; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'itemSlot empty';
+        slot.textContent = '◯';
+        invDiv.appendChild(slot);
+    }
+}
+
+function togglePause() {
+    if (!gameState.gameOver && !gameState.won) gameState.paused = !gameState.paused;
+}
+
+function nextRoom() {
+    if (!rooms[curRoom].cleared) return;
+    if (curRoom < rooms.length - 1) {
+        loadRoom(curRoom + 1);
+    } else {
+        gameState.floor++;
+        genFloor();
+        loadRoom(0);
+    }
+}
+
+function restartGame() {
+    location.reload();
+}
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
