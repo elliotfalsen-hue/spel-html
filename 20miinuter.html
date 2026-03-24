@@ -3,47 +3,84 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lobotomy Corporation-Inspired Game</title>
+    <title>Lobotomy Corporation Inspired Game</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #2d2d2d;
-            color: white;
-            padding: 20px;
+            background-color: black;
+            color: #00ff00;
+            font-family: 'Courier New', Courier, monospace;
         }
-        h1 {
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #00ff00;
+        }
+        #ui {
             text-align: center;
-            color: #ffcc00;
-        }
-        .abnormality {
-            border: 1px solid #ffcc00;
-            padding: 10px;
-            margin: 10px 0;
-            background-color: #3d3d3d;
         }
     </style>
 </head>
 <body>
-    <h1>Lobotomy Corporation-Inspired Game</h1>
-    <p>Welcome to a world where management of abnormalities is key to survival.</p>
-    <h2>Gameplay Overview</h2>
-    <p>In this game, you will manage employees, investigate abnormalities, and work to contain risks. Your decisions will affect the outcome of each day.</p>
-    <h2>Abnormalities</h2>
-    <div class="abnormality">
-        <h3>Abnormality Name</h3>
-        <p>Description: A brief description of the abnormality.</p>
-        <p>Containment Strategy: Outline the strategy to contain this abnormality.</p>
+    <div id="ui">
+        <h1>Lobotomy Corporation Inspired Game</h1>
+        <p id="dayCycle">Day: 1</p>
+        <p id="budget">Budget: $500</p>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
     </div>
-    <h2>Employee Management</h2>
-    <p>Manage your employees' mental and physical conditions to ensure the smooth operation of your corporation.</p>
-    <h2>Work Stations</h2>
-    <p>Each work station provides unique opportunities and risks associated with the abnormalities.</p>
-    <h2>Containment Mechanics</h2>
-    <p>Strategies and methods to contain both the mental and physical ramifications of abnormalities.</p>
-    <h2>Detailed Gameplay Systems</h2>
-    <p>Engage with various systems that come into play during the game, impacting progress and outcomes.</p>
-    <footer>
-        <p>Copyright © 2026 Lobotomy Corporation-Inspired Game</p>
-    </footer>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let day = 1;
+        let budget = 500;
+        let employees = [];
+        const abnormalities = []; // Array to store abnormality objects
+        const workAssignments = [];
+
+        // Initialize game
+        function initializeGame() {
+            // Create 12 unique abnormalities
+            createAbnormalities();
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Create unique abnormalities
+        function createAbnormalities() {
+            for (let i = 0; i < 12; i++) {
+                abnormalities.push({
+                    name: 'Abnormality ' + (i+1),
+                    threatLevel: Math.floor(Math.random() * 10) + 1,
+                    skillsRequired: Math.floor(Math.random() * 5) + 1
+                });
+            }
+        }
+
+        // Main game loop
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawUI();
+            handleInteractions();
+            // Update game state, manage employees, handles breaches etc.
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Draw UI elements
+        function drawUI() {
+            // Drawing Day and Budget
+            ctx.fillStyle = '#00ff00';
+            ctx.fillText('Day: ' + day, 10, 20);
+            ctx.fillText('Budget: $' + budget, 10, 40);
+        }
+
+        // Handle interactions and work assignments
+        function handleInteractions() {
+            // Implement work assignment system, manage employee sanity and HP
+            // Handle containment breaches and manage threat levels
+        }
+    
+        // Start the game
+        initializeGame();
+    </script>
 </body>
 </html>
