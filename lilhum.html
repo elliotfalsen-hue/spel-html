@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>HTML5 Arena Roguelite</title>
-<style>
+ <style>
     * {
         box-sizing: border-box;
     }
@@ -921,9 +921,128 @@ class XPOrb {
 }
 const xpOrbs = [];
 
-// =========================================================
-// UPGRADE SYSTEM (POP CULTURE NAMES)
-// =========================================================
+
+class OrbitingBlade {
+    constructor(angleOffset) {
+        this.angleOffset = angleOffset;
+        this.radius = 60;
+        this.size = 18;
+        this.damage = 20;
+        this.rotationSpeed = 0.004;
+        this.time = 0;
+    }
+    update(dt) {
+        this.time += dt * this.rotationSpeed;
+        this.x = player.x + Math.cos(this.time + this.angleOffset) * this.radius;
+        this.y = player.y + Math.sin(this.time + this.angleOffset) * this.radius;
+
+        enemies.forEach(e => {
+            const r = e.radius + this.size;
+            if (distSq(this.x, this.y, e.x, e.y) < r * r) {
+                e.takeDamage(this.damage);
+            }
+        });
+    }
+    draw() {
+        ctx.save();
+        ctx.fillStyle = "#ffdd55";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const orbitingWeapons = [];
+
+
+class AutoBomb {
+    constructor() {
+        this.x = player.x;
+        this.y = player.y;
+        this.vx = randRange(-2, 2);
+        this.vy = randRange(-2, 2);
+        this.size = 10;
+        this.timer = 1200; // ms
+        this.exploded = false;
+    }
+    update(dt) {
+        this.timer -= dt;
+        this.x += this.vx;
+        this.y += this.vy;
+
+        if (this.timer <= 0 && !this.exploded) {
+            this.explode();
+        }
+    }
+    explode() {
+        this.exploded = true;
+        spawnBurst(this.x, this.y, 20, "rgba(255,120,80,0.9)", 4, 8, 1, 3, 300, 800);
+
+        enemies.forEach(e => {
+            if (distSq(this.x, this.y, e.x, e.y) < 200 * 200) {
+                e.takeDamage(60);
+            }
+        });
+    }
+    draw() {
+        if (this.exploded) return;
+        ctx.save();
+        ctx.fillStyle = "#ff8844";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const bombs = [];
+
+
+
+class Drone {
+    constructor() {
+        this.x = player.x;
+        this.y = player.y;
+        this.size = 12;
+        this.cooldown = 0;
+    }
+    update(dt) {
+        const angle = performance.now() * 0.002;
+        this.x = player.x + Math.cos(angle) * 80;
+        this.y = player.y + Math.sin(angle) * 80;
+
+        this.cooldown -= dt;
+        if (this.cooldown <= 0) {
+            this.shoot();
+            this.cooldown = 700;
+        }
+    }
+    shoot() {
+        if (enemies.length === 0) return;
+        const target = enemies[0];
+        const angle = angleBetween(this.x, this.y, target.x, target.y);
+        projectiles.push(new Projectile(
+            this.x, this.y,
+            Math.cos(angle) * 8,
+            Math.sin(angle) * 8,
+            5,
+            10,
+            0,
+            "#55ffdd"
+        ));
+    }
+    draw() {
+        ctx.save();
+        ctx.fillStyle = "#55ffee";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+const drones = [];
+
+
+   
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradeOptionsContainer = document.getElementById("upgradeOptions");
 const upgradeTitle = document.getElementById("upgradeTitle");
@@ -1206,6 +1325,21 @@ const allUpgrades = [
             player.temporalSlipUsed = false;
         }
     }
+{
+    id: "orbit1",
+    name: "Mantis Blade Orbit",
+    ...
+},
+{
+    id: "bomb1",
+    name: "Militech Auto-Bomber",
+    ...
+},
+{
+    id: "drone1",
+    name: "Arasaka Micro-Drone",
+    ...
+},
 ];
 
 let availableUpgrades = [...allUpgrades];
@@ -1486,6 +1620,13 @@ function gameLoop(timestamp) {
         pt.draw();
         if (pt.life <= 0) particles.splice(i, 1);
     });
+orbitingWeapons.forEach(w => { w.update(dt); w.draw(); });
+bombs.forEach((b, i) => {
+    b.update(dt);
+    b.draw();
+    if (b.exploded) bombs.splice(i, 1);
+});
+drones.forEach(d => { d.update(dt); d.draw(); });
 
     player.draw();
 
